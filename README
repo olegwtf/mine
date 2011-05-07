@@ -1,0 +1,4 @@
+mine: make IPC over network easy
+
+Set of the programs and libraries (including server and client)
+to enable simple and fast IPC over network
