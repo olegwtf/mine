@@ -2,12 +2,13 @@ package Mine::Config::Actions;
 
 use strict;
 use v5.10;
-use Mine::Utils::IP qw(cidr2long host2long);
+use Data::Dumper;
+use Mine::Utils::IP qw(cidr2long host2long splitbycidr);
 use base Mine::Config::;
 
 =head1 NAME
 
-Mine::Config::Actions - mine actions config manipulator class
+Mine::Config::Actions - mine actions config manipulator class. Inherits from Mine::Config
 
 =cut 
 
@@ -24,7 +25,7 @@ our $ACTION_MAX_RECURSION_LEVEL = 10;
 =head2 new([$cfgpath])
 
 Same as Mine::Config::new(), but in addition tryes to validate config if specified.
-Croaks on error
+Croaks on error. Default config is []
 
 =cut
 
@@ -37,39 +38,113 @@ sub new {
 	}
 	
 	$self->validate();
-	$self->_make_internal();
-	
-	return $self;
-}
-
-=head2 new_from_default([$cfgpath])
-
-Same as new, but not load config even if $cfgpath specified. Loads default config
-instead. Default config for actions is empty array: []
-
-=cut
-
-sub new_from_default {
-	my ($class, $cfgpath) = @_;
-	
-	my $self = $class->new();
-	$self->{cfgpath} = $cfgpath;
-	
 	return $self;
 }
 
 =head2 save([$cfgpath])
 
-Same as Mine::Config::save().
+Same as Mine::Config::save(), but validate config before saving.
+Croaks on error.
 
 =cut
 
 sub save {
 	my ($self, $cfgpath) = @_;
 	
-	$self->_make_external();
 	$self->validate();
 	$self->SUPER::save($cfgpath);
+}
+
+=head2 validate()
+
+Validate config. Croaks if config is not valid. Both object and static ways to call
+available: Mine::Config::Actions::validate($not_blessed_ref) and $actions_cfg->validate()
+
+Valid config form is:
+
+	(root)   (action and conditions)
+	array -> hash -> {
+		host  => [h1, ..., hn], # optional, hn may be in form of net/cidr
+		user  => [u1, ..., un], # optional
+		event => [e1, ..., en], #optional
+		action => [ # array of actions
+			{                                                       <-----------------|
+				'Plugin::method': null, # call method from Plugin without arguments   |
+				'Plugin::method', [ # with arguments                                  | # same
+					arg1, # scalar argument                                           |
+					{	# argument may be a hash (method call inside method call) -----
+						
+					}
+				]
+			}
+		]
+	}
+
+=cut
+
+sub validate {
+	my ($self) = @_;
+	my $cfg = eval{ ref($self) eq 'ARRAY' ? $self : $self->{data} };
+	
+	ref($cfg) eq 'ARRAY'
+		or die 'validate(): ARRAY expected. Have: ', Dumper($cfg);
+	
+	foreach my $entry (@$cfg) {
+		ref($entry) eq 'HASH'
+			or die 'validate(): OBJECT expected. Have: ', Dumper($entry);
+		
+		while (my ($key, $value) = each(%$entry)) {
+			given ($key) {
+				when (['sender', 'user', 'event']) {
+					_validate_array_of_scalars($value);
+				}
+				when ('action') {
+					ref($value) eq 'ARRAY'
+						or die 'validate(): ARRAY expected. Have: ', Dumper($value);
+						
+					foreach my $e (@$value) {
+						ref($e) eq 'HASH'
+							or die 'validate(): OBJECT expected. Have: ', Dumper($e);
+							
+						_validate_action($e, 0);
+					}
+				}
+				default {
+					die 'validate(): Invalid option `', $key, '\', rtfm';
+				}
+			}
+		}
+	}
+}
+
+# part of validate(): validate action hash parameter using recursion
+sub _validate_action($$) {
+	my ($action, $recur_level) = @_;
+	
+	if ($recur_level > $ACTION_MAX_RECURSION_LEVEL) {
+		die 'validate(): Action max recursion level exceed';
+	}
+	
+	while (my ($func, $arg) = each %$action) {
+		$func =~ /[a-z]+::[a-z]+/i
+			or die 'validate(): Invalid function name `', $func, '\', should be Plugin::method';
+		
+		if (ref($arg) && ref($arg) ne 'ARRAY') {
+			die 'validate(): ARRAY or SCALAR expected. Have: ', Dumper($arg);
+		}
+		
+		if (ref($arg)) {
+			foreach my $elt (@$arg) {
+				if (ref($elt) && ref($elt) ne 'HASH') {
+					die 'validate(): ARRAY or SCALAR expected. Have: ', Dumper($elt);
+				}
+				
+				if (ref($elt)) {
+					_validate_action($elt, $recur_level + 1);
+				}
+			}
+		}
+	}
 }
 
 =head2 get_optimized()
@@ -122,17 +197,18 @@ sub get_optimized {
 		
 		if (exists $entry->{sender}) {
 			foreach my $elt (@{$entry->{sender}}) {
-				if (my ($net, $cidr) = $elt =~ m!(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/(\d+)!) {
-					# net + cidr form
-					eval {
+				eval {
+					if (my ($net, $cidr) = splitbycidr($elt)) {
+						# net + cidr form
 						$net  = host2long($net);
 						$cidr = cidr2long($cidr);
 						push @{$cfg->{netmask}}, $net, $cidr, $action;
-					};
-				}
-				else {
-					push @{$cfg->{senders}{$elt}}, $action;
-				}
+					}
+					else {
+						$elt = host2long($elt);
+						push @{$cfg->{senders}{$elt}}, $action;
+					}
+				};
 			}
 		}
 		if (exists $entry->{user}) {
@@ -148,103 +224,6 @@ sub get_optimized {
 	}
 	
 	return $cfg;
-}
-
-=head2 validate()
-
-Validate config. Croaks if config is not valid. Both object and static ways to call
-available: Mine::Config::Actions::validate($not_blessed_ref) and $actions_cfg->validate()
-
-Valid config form is:
-	(root)   (action and conditions)
-	array -> hash -> {
-		host  => [h1, ..., hn], # optional, hn may be in form of net/cidr
-		user  => [u1, ..., un], # optional
-		event => [e1, ..., en], #optional
-		action => [ # array of actions
-			{                                                       <-----------------|
-				'Plugin::method': null, # call method from Plugin without arguments   |
-				'Plugin::method', [ # with arguments                                  | # same
-					arg1, # scalar argument                                           |
-					{	# argument may be a hash (method call inside method call) -----
-						
-					}
-				]
-			}
-		]
-	}
-
-=cut
-
-sub validate {
-	my ($self) = @_;
-	my $cfg = eval{ ref($self) eq 'ARRAY' ? $self : $self->{data} };
-	
-	ref($cfg) eq 'ARRAY'
-		or die 'validate(): Invalid root element. Should be ARRAY []';
-	
-	foreach my $entry (@$cfg) {
-		ref($entry) eq 'HASH'
-			or die 'validate(): Invalid element on second level. Should be OBJECT {}';
-		
-		while (my ($key, $value) = each(%$entry)) {
-			given ($key) {
-				when (['sender', 'user', 'event']) {
-					ref($value) eq 'ARRAY'
-						or die 'validate(): Invalid element with key `', $key, '\'. Should be ARRAY []';
-						
-					foreach my $e (@$value) {
-						ref($e)
-							and die 'validate(): Invalid element in the ARRAY with key `', $key, '\'. Should be SCALAR';
-					}
-				}
-				when ('action') {
-					ref($value) eq 'ARRAY'
-						or die 'validate(): Invalid element with key `', $key, '\'. Should be ARRAY []';
-						
-					foreach my $e (@$value) {
-						ref($e) eq 'HASH'
-							or die 'validate(): Invalid action element. Should be OBJECT {}';
-							
-						_validate_action($e, 0);
-					}
-				}
-				default {
-					die 'validate(): Invalid option `', $key, '\', rtfm';
-				}
-			}
-		}
-	}
-}
-
-# part of validate(): validate action hash parameter using recursion
-sub _validate_action($$) {
-	my ($action, $recur_level) = @_;
-	
-	if ($recur_level > $ACTION_MAX_RECURSION_LEVEL) {
-		die 'validate(): Action max recursion level exceed';
-	}
-	
-	while (my ($func, $arg) = each %$action) {
-		$func =~ /[a-z]+::[a-z]+/i
-			or die 'validate(): Invalid function name `', $func, '\', should be Plugin::method';
-		
-		if (ref($arg) && ref($arg) ne 'ARRAY') {
-			die 'validate(): Invalid element in action with function `', $func, '\'. Should be ARRAY or SCALAR';
-		}
-		
-		if (ref($arg)) {
-			foreach my $elt (@$arg) {
-				if (ref($elt) && ref($elt) ne 'HASH') {
-					die 'validate(): Invalid element in action arguments with function `', $func, '\'. Should be ARRAY or SCALAR';
-				}
-				
-				if (ref($elt)) {
-					_validate_action($elt, $recur_level + 1);
-				}
-			}
-		}
-	}
 }
 
 1;
