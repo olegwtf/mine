@@ -58,7 +58,7 @@ Otherwise returns false.
 sub splitbycidr($) {
 	my ($netandcidr) = @_;
 	
-	my ($net, $cidr) = $netandcidr =~ m!(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/(\d+)!)
+	my ($net, $cidr) = $netandcidr =~ m!(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/(\d+)!
 		or return;
 		
 	return ($net, $cidr);

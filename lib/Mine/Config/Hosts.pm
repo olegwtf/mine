@@ -62,7 +62,7 @@ sub validate {
 	my ($self) = @_;
 	my $cfg = eval{ ref($self) eq 'ARRAY' ? $self : $self->{data} };
 	
-	_validate_array_of_scalars($cfg);
+	Mine::Config::_validate_array_of_scalars($cfg);
 }
 
 =head2 get_optimized()

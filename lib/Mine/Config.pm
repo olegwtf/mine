@@ -28,7 +28,7 @@ sub new {
 		$self->{cfgpath} = $cfgpath;
 		
 		local $/ = undef;
-		open my $fh, $cfgpath;
+		open my $fh, '<', $cfgpath;
 		my $json = <$fh>;
 		close $fh;
 		
@@ -74,7 +74,7 @@ sub save {
 	
 	open my $fh, '>', $cfgpath || $self->{cfgpath};
 	my $json = encode_json($self->{data});
-	syswrite($fh, $json);
+	print $fh $json;
 	close $fh;
 }
 
@@ -89,6 +89,8 @@ sub _validate_hash_of_scalars($) {
 		ref($value)
 			and die 'validate(): SCALAR expected. Have: ', Dumper($value);
 	}
+	
+	1;
 }
 
 sub _validate_array_of_scalars($) {
@@ -101,6 +103,8 @@ sub _validate_array_of_scalars($) {
 		ref($value)
 			and die 'validate(): SCALAR expected. Have: ', Dumper($value);
 	}
+	
+	1;
 }
 
 1;

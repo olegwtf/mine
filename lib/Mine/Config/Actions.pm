@@ -96,7 +96,7 @@ sub validate {
 		while (my ($key, $value) = each(%$entry)) {
 			given ($key) {
 				when (['sender', 'user', 'event']) {
-					_validate_array_of_scalars($value);
+					Mine::Config::_validate_array_of_scalars($value);
 				}
 				when ('action') {
 					ref($value) eq 'ARRAY'
@@ -106,7 +106,7 @@ sub validate {
 						ref($e) eq 'HASH'
 							or die 'validate(): OBJECT expected. Have: ', Dumper($e);
 							
-						_validate_action($e, 0);
+						_validate_action($e, 1);
 					}
 				}
 				default {
@@ -115,6 +115,8 @@ sub validate {
 			}
 		}
 	}
+	
+	1;
 }
 
 # part of validate(): validate action hash parameter using recursion
@@ -129,22 +131,26 @@ sub _validate_action($$) {
 		$func =~ /[a-z]+::[a-z]+/i
 			or die 'validate(): Invalid function name `', $func, '\', should be Plugin::method';
 		
-		if (ref($arg) && ref($arg) ne 'ARRAY') {
+		my $ref = ref($arg);
+		if ($ref && !($ref ~~ ['ARRAY', 'JSON::XS::Boolean'])) {
 			die 'validate(): ARRAY or SCALAR expected. Have: ', Dumper($arg);
 		}
 		
-		if (ref($arg)) {
+		if ($ref eq 'ARRAY') {
 			foreach my $elt (@$arg) {
-				if (ref($elt) && ref($elt) ne 'HASH') {
-					die 'validate(): ARRAY or SCALAR expected. Have: ', Dumper($elt);
+				$ref = ref($elt);
+				if ($ref && !($ref ~~ ['HASH', 'JSON::XS::Boolean'])) {
+					die 'validate(): HASH or SCALAR expected. Have: ', Dumper($elt);
 				}
 				
-				if (ref($elt)) {
+				if ($ref eq 'HASH') {
 					_validate_action($elt, $recur_level + 1);
 				}
 			}
 		}
 	}
+	
+	1;
 }
 
 =head2 get_optimized()
@@ -169,7 +175,8 @@ Returned config form will be:
 			...
 			en => [act1, ..., actn]
 		},
-		netmask => [net1, mask1, act1, ..., netn, maskn, actn]
+		netmask => [net1, mask1, act1, ..., netn, maskn, actn],
+		actions => [act1, ..., actn] # actions that have no conditions
 	}
 
 =cut
@@ -182,6 +189,7 @@ sub get_optimized {
 		users   => {},
 		events  => {},
 		netmask => [],
+		actions => [],
 	};
 	
 	foreach my $entry (@{$self->{data}}) {
@@ -192,7 +200,11 @@ sub get_optimized {
 		$conditions++ if exists $entry->{user};
 		$conditions++ if exists $entry->{event};
 		
-		next unless $conditions;
+		unless($conditions) {
+			push @{$cfg->{actions}}, $entry->{action};
+			next;
+		}
+		
 		my $action = {action => $entry->{action}, condcnt => $conditions};
 		
 		if (exists $entry->{sender}) {
@@ -212,12 +224,12 @@ sub get_optimized {
 			}
 		}
 		if (exists $entry->{user}) {
-			foreach my $elt (@{$cfg->{users}}) {
+			foreach my $elt (@{$entry->{user}}) {
 				push @{$cfg->{users}{$elt}}, $action;
 			}
 		}
 		if (exists $entry->{event}) {
-			foreach my $elt (@{$cfg->{events}}) {
+			foreach my $elt (@{$entry->{event}}) {
 				push @{$cfg->{events}{$elt}}, $action;
 			}
 		}
