@@ -54,7 +54,7 @@ sub validate {
 =head2 get_optimized()
 
 Return config optimized to search ip. All ip converted to long, net/cidr form
-converted to [net2long, mask2long]
+converted to [net2long, mask2long]. In addition stores it in $self->{optimized}
 
 =cut
 
@@ -75,7 +75,7 @@ sub get_optimized {
 		};
 	}
 	
-	return $cfg;
+	return $self->{optimized} = $cfg;
 }
 
 1;

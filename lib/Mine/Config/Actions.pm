@@ -142,6 +142,7 @@ sub _validate_action($$) {
 =head2 get_optimized()
 
 Return config optimized to easy search of the action by host, user and event
+In addition stores it in $self->{optimized}
 
 Returned config form will be:
 
@@ -221,7 +222,7 @@ sub get_optimized {
 		}
 	}
 	
-	return $cfg;
+	return $self->{optimized} = $cfg;
 }
 
 1;
