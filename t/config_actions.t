@@ -324,5 +324,16 @@ ok(
 	},
 	'Saving'
 ) or diag $@;
+# saving invalid data config
+$json = '[]';
+like(
+	eval {
+		$cfg = Mine::Config::Actions->new(\$json);
+		$cfg->{data}[0] = [];
+		$cfg->save();
+	} || $@,
+	qr/validate/i,
+	'Saving incorrect config'
+) or diag $@;
 
 done_testing();
