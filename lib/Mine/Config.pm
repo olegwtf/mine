@@ -58,7 +58,8 @@ sub new_from_default {
 
 Saves config to specified $cfgpath or path specified in the constructor.
 At least one should be specified. If path in the constructor was not specified
-$cfgpath becomes default path. Croaks on error.
+$cfgpath becomes default path. If subclass have validate() method, then tryes to
+validate first. Croaks on error.
 
 =cut
 
@@ -67,6 +68,11 @@ sub save {
 	
 	croak 'save(): path not known'
 		unless defined($cfgpath) || defined($self->{cfgpath});
+		
+	if ($self->can('validate')) {
+		# subclasses can have validate method
+		$self->validate();
+	}
 	
 	unless (defined $self->{cfgpath}) {
 		$self->{cfgpath} = $cfgpath;
@@ -85,7 +91,7 @@ sub _validate_hash_of_scalars($) {
 	ref($elt) eq 'HASH'
 		or die 'validate(): OBJECT expected. Have: ', Dumper($elt);
 		
-	while (my ($key, $value) = %$elt) {
+	while (my ($key, $value) = each %$elt) {
 		ref($value)
 			and die 'validate(): SCALAR expected. Have: ', Dumper($value);
 	}

@@ -41,20 +41,6 @@ sub new {
 	return $self;
 }
 
-=head2 save([$cfgpath])
-
-Same as Mine::Config::save(), but validate config before saving.
-Croaks on error.
-
-=cut
-
-sub save {
-	my ($self, $cfgpath) = @_;
-	
-	$self->validate();
-	$self->SUPER::save($cfgpath);
-}
-
 =head2 validate()
 
 Validate config. Croaks if config is not valid. Both object and static ways to call
