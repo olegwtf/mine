@@ -51,14 +51,14 @@ sub validate {
 	Mine::Config::_validate_array_of_scalars($cfg);
 }
 
-=head2 get_optimized()
+=head2 load_optimized()
 
 Return config optimized to search ip. All ip converted to long, net/cidr form
 converted to [net2long, mask2long]. In addition stores it in $self->{optimized}
 
 =cut
 
-sub get_optimized {
+sub load_optimized {
 	my ($self) = @_;
 	
 	my $cfg = [];

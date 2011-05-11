@@ -139,7 +139,7 @@ sub _validate_action($$) {
 	1;
 }
 
-=head2 get_optimized()
+=head2 load_optimized()
 
 Return config optimized to easy search of the action by host, user and event
 In addition stores it in $self->{optimized}
@@ -168,7 +168,7 @@ Returned config form will be:
 
 =cut
 
-sub get_optimized {
+sub load_optimized {
 	my ($self) = @_;
 	
 	my $cfg = {
