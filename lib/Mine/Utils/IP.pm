@@ -17,7 +17,7 @@ All functions below on request
 
 =cut
 
-our @EXPORT_OK = qw(cidr2long host2long splitbycidr);
+our @EXPORT_OK = qw(cidr2long host2long splitbycidr ip_belongs_net);
 
 =head2 cidr2long($cidr)
 
@@ -62,6 +62,11 @@ sub splitbycidr($) {
 		or return;
 		
 	return ($net, $cidr);
+}
+
+sub ip_belongs_net($$$) {
+	my ($ip, $net, $mask) = @_;
+	($ip & $mask) == $net;
 }
 
 1;

@@ -53,24 +53,40 @@ sub validate {
 
 =head2 load_optimized()
 
-Return config optimized to search ip. All ip converted to long, net/cidr form
-converted to [net2long, mask2long]. In addition stores it in $self->{optimized}
+Return config optimized to search ip. All ip converted to long
+
+Format is:
+
+	{
+		ip => {
+			ipaslong1 => 1,
+			...
+			ipaslongn => 1
+		},
+		netmask => [
+			ipaslong1,
+			maskaslong1,
+			...
+			ipaslongn,
+			maskaslongn
+		]
+	}
 
 =cut
 
 sub load_optimized {
 	my ($self) = @_;
 	
-	my $cfg = [];
+	my $cfg = {ip => {}, netmask => []};
 	foreach my $elt (@{$self->{data}}) {
 		eval {
 			if (my ($net, $cidr) = splitbycidr($elt)) {
 				$net  = host2long($net);
 				$cidr = cidr2long($cidr);
-				push @$cfg, [$net, $cidr];
+				push @{$cfg->{netmask}}, $net, $cidr;
 			}
 			else {
-				push @$cfg, host2long($elt);
+				push $cfg->{ip}{host2long($elt)} = 1;
 			}
 		};
 	}
