@@ -64,6 +64,13 @@ sub splitbycidr($) {
 	return ($net, $cidr);
 }
 
+=head2 ip_belongs_net($ip, $net, $mask)
+
+Returns true if ip belongs net with specified mask
+False otherwise.
+
+=cut
+
 sub ip_belongs_net($$$) {
 	my ($ip, $net, $mask) = @_;
 	($ip & $mask) == $net;

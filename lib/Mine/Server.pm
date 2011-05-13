@@ -18,6 +18,9 @@ use constant {
 	STATE_WAITING   => 4,
 };
 
+# some prototypes
+sub _($);
+
 # We are Singleton
 my $self;
 
@@ -104,6 +107,7 @@ sub _cb_accept {
 	);
 	$handle->{_mine}{state} = STATE_AUTH;
 	$handle->{_mine}{host} = host2long($host);
+	$self->{handles}{_$handle} = $handle; # see sub _($)
 }
 
 sub _cb_read {
@@ -149,6 +153,7 @@ sub _cb_read {
 				}
 				else {
 					$handle->push_write("\00");
+					delete $self->{handles}{_$handle};
 					$handle->destroy();
 				}
 			}
@@ -177,7 +182,7 @@ sub _cb_error {
 }
 
 #### other routines ####
-sub _can_auth {
+sub _can_auth($$$) {
 	my ($host, $login, $password) = @_;
 	
 	if ($login && $self->{cfg}{users}{data}{$login} eq md5_hex($login)) {
@@ -196,8 +201,8 @@ sub _can_auth {
 	}
 	
 	my $netmask = $self->{cfg}{main}{optimized}{netmask};
-	for (my $i=0, $l=@$netmask; $i<$l; $i+=2) {
-		if (ip_belongs_net($host, $netmask->[$i], $netmask[$i+1])) {
+	for (my $i=0, my $l=@$netmask; $i<$l; $i+=2) {
+		if (ip_belongs_net($host, $netmask->[$i], $netmask->[$i+1])) {
 			return 1;
 		}
 	}
@@ -205,7 +210,11 @@ sub _can_auth {
 	return 0;
 }
 
-sub _strshift {
+sub _($) {
+	substr($_[0], 22, -1);
+}
+
+sub _strshift($$;$) {
 	my $rv = substr($_[0], 0, defined($_[1]) ? $_[1] : 1)
 		if defined wantarray();
 		
