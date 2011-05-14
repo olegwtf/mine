@@ -21,11 +21,11 @@ isa_ok($cfg, 'Mine::Config::Hosts');
 my $json;
 # minimal valid
 $json = '[]';
-ok(eval{Mine::Config::Hosts->new(\$json)}, "Minimal vlid config: $json")
+ok(eval{Mine::Config::Hosts->new(\$json)}, "Minimal valid config: $json")
 	or diag $@;
 # more complete
 $json = '["10.0.0.1", "10.0.0.2", "256.192.0.8", "10.10.0.0/20", "10.0.9.3"]';
-ok(eval{Mine::Config::Hosts->new(\$json)}, "More complete vlid config: $json")
+ok(eval{Mine::Config::Hosts->new(\$json)}, "More complete valid config: $json")
 	or diag $@;
 # optimized
 is_deeply(

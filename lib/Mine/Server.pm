@@ -114,6 +114,27 @@ sub _cb_read {
 	my ($handle) = @_;
 	
 	given ($handle->{_mine}{state}) {
+		when (STATE_WAITING) {
+			my $state = unpack('C', _strshift($handle->{rbuf}));
+			given ($state) {
+				when (STATE_EVENT_RCV) {
+					$handle->{_mine}{event} = undef;
+				}
+				when (0) {
+					# contimuation of the event data
+					$state = STATE_EVENT_RCV;
+				}
+				when (STATE_EVENT_REG) {
+					
+				}
+				default {
+					return;
+				}
+			}
+			
+			$handle->{_mine}{state} = $state;
+			goto &_cb_read if length $handle->{rbuf} > 0;
+		}
 		when (STATE_AUTH) {
 			unless (exists $handle->{_mine}{user}) {
 				# reading username
@@ -159,15 +180,22 @@ sub _cb_read {
 			}
 		}
 		when (STATE_EVENT_RCV) {
-			
+			unless ($handle->{_mine}{event}) {
+				my $elen = unpack('C', $handle->{rbuf});
+				
+				if ($elen == 0) {
+					$handle->{_mine}{state} = STATE_WAITING;
+				}
+				elsif (length($handle->{rbuf}) > $elen) {
+					_strshift($handle->{rbuf});
+					$handle->{_mine}{event} = _strshift($handle->{rbuf}, $elen);
+				}
+			}
+			else {
+				$handle->{rbuf} = '';
+			}
 		}
 		when (STATE_EVENT_REG) {
-			
-		}
-		when (STATE_WAITING) {
-			
-		}
-		default {
 			
 		}
 	}
