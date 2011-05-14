@@ -202,11 +202,11 @@ is(
 	'Deep value check'
 ) or diag $@;
 
-# get_optimized() tests
+# load_optimized() tests
 ok(
 	eval {
 		$cfg = Mine::Config::Actions->new(\$json);
-		my $opt = $cfg->get_optimized();
+		my $opt = $cfg->load_optimized();
 		$opt->{users}{pinokio}[0]{action} == $cfg->{data}->[1]->{action}
 		&&
 		$opt->{users}{pinokio}[0]{condcnt} == 1
@@ -240,7 +240,7 @@ $json = <<JSON;
 JSON
 is_deeply(
 	eval {
-		Mine::Config::Actions->new(\$json)->get_optimized()
+		Mine::Config::Actions->new(\$json)->load_optimized()
 	},
 	
 	{

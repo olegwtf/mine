@@ -30,13 +30,18 @@ ok(eval{Mine::Config::Hosts->new(\$json)}, "More complete vlid config: $json")
 # optimized
 is_deeply(
 	eval {
-		Mine::Config::Hosts->new(\$json)->get_optimized();
+		Mine::Config::Hosts->new(\$json)->load_optimized();
 	},
-	[
-		167772161, 167772162,
-		[168427520, 4294963200],
-		167774467
-	],
+	
+	{
+		ip => {
+			167772161 => 1,
+			167772162 => 1,
+			167774467 => 1,
+		},
+		netmask => [168427520, 4294963200],
+	},
+	
 	"Optimized config deep comrasion: $json"
 );
 

@@ -86,7 +86,7 @@ sub load_optimized {
 				push @{$cfg->{netmask}}, $net, $cidr;
 			}
 			else {
-				push $cfg->{ip}{host2long($elt)} = 1;
+				$cfg->{ip}{host2long($elt)} = 1;
 			}
 		};
 	}
