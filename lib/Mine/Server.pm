@@ -124,9 +124,6 @@ sub _cb_read {
 					# contimuation of the event data
 					$state = STATE_EVENT_RCV;
 				}
-				when (STATE_EVENT_REG) {
-					
-				}
 				default {
 					return;
 				}
@@ -189,6 +186,7 @@ sub _cb_read {
 				elsif (length($handle->{rbuf}) > $elen) {
 					_strshift($handle->{rbuf});
 					$handle->{_mine}{event} = _strshift($handle->{rbuf}, $elen);
+					$handle->{_mine}{state} = STATE_WAITING;
 				}
 			}
 			else {
@@ -196,7 +194,17 @@ sub _cb_read {
 			}
 		}
 		when (STATE_EVENT_REG) {
+			my $elen = unpack('C', $handle->{rbuf});
 			
+			if (length($handle->{rbuf}) > $elen+4) {
+				my (undef, undef, $event, $ip) = 
+					unpack('C2a'.$elen.'a4', _strshift($handle->{rbuf}, $elen+5));
+					
+				my $key = $ip.$event;
+				$self->{waiting}{$key} = $handle;
+				$self->{handles}{_$handle} = $key;
+				$handle->{_mine}{state} = STATE_WAITING;
+			}
 		}
 	}
 }
