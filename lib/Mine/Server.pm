@@ -10,6 +10,7 @@ use Mine::Config::Main;
 use Mine::Config::Actions;
 use Mine::Config::Users;
 use Mine::Utils::IP qw(host2long ip_belongs_net);
+use Mine::PluginManager;
 
 use constant {
 	STATE_AUTH      => 1,
