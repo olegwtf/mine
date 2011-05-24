@@ -1,19 +1,20 @@
 package Mine::PluginManager;
 
 use strict;
+use v5.10;
+use attributes;
 
 sub new {
-	my ($class, $stash, @extrainc) = @_;
+	my ($class, @extrainc) = @_;
 	my $self = {};
 	$self->{extrainc} = \@extrainc;
-	$self->{stash}  = $stash;
 	$self->{plugins} = {};
 	
 	bless $self, $class;
 }
 
 sub load {
-	my $plugin = shift;
+	my ($self, $plugin) = @_;
 	
 	if (exists $self->{plugins}{$plugin}) {
 		return 1;
@@ -30,7 +31,7 @@ sub load {
 }
 
 sub unload {
-	my $plugin = shift;
+	my ($self, $plugin) = @_;
 	
 	unless (exists $self->{plugins}{$plugin}) {
 		return 1;
@@ -41,9 +42,17 @@ sub unload {
 }
 
 sub exec {
-	my $sub = shift;
+	my ($self, $stash, $sub) = splice @_, 0, 3;
 	
-	"Mine::Plugin::$sub"->($self->{stash}, @_);
+	$self->load( substr($sub, 0, rindex($sub, '::')) );
+	$sub = "Mine::Plugin::$sub";
+	
+	if ('EV_SAFE' ~~ [attributes::get(\&{$sub})]) {
+		$sub->($stash, @_);
+	}
+	else {
+		# fork
+	}
 }
 
 1;

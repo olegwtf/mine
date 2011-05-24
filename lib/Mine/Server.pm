@@ -10,14 +10,8 @@ use Mine::Config::Main;
 use Mine::Config::Actions;
 use Mine::Config::Users;
 use Mine::Utils::IP qw(host2long ip_belongs_net);
+use Mine::Protocol;
 use Mine::PluginManager;
-
-use constant {
-	STATE_AUTH      => 1,
-	STATE_EVENT_RCV => 2,
-	STATE_EVENT_REG => 3,
-	STATE_WAITING   => 4,
-};
 
 # some prototypes
 sub _($);
@@ -106,7 +100,7 @@ sub _cb_accept {
 		on_eof   => \&_cb_eof,
 		on_error => \&_cb_error
 	);
-	$handle->{_mine}{state} = STATE_AUTH;
+	$handle->{_mine}{state} = PROTO_MAGIC_AUTH;
 	$handle->{_mine}{host} = host2long($host);
 	$self->{handles}{_$handle} = $handle; # see sub _($)
 }
@@ -115,15 +109,15 @@ sub _cb_read {
 	my ($handle) = @_;
 	
 	given ($handle->{_mine}{state}) {
-		when (STATE_WAITING) {
+		when (PROTO_MAGIC_WAITING) {
 			my $state = unpack('C', _strshift($handle->{rbuf}));
 			given ($state) {
-				when (STATE_EVENT_RCV) {
+				when (PROTO_MAGIC_EVENT_RCV) {
 					$handle->{_mine}{event} = undef;
 				}
-				when (0) {
-					# contimuation of the event data
-					$state = STATE_EVENT_RCV;
+				when (PROTO_MAGIC_DATA) {
+					# continuation of the event data
+					$state = PROTO_MAGIC_EVENT_RCV;
 				}
 				default {
 					return;
@@ -133,7 +127,7 @@ sub _cb_read {
 			$handle->{_mine}{state} = $state;
 			goto &_cb_read if length $handle->{rbuf} > 0;
 		}
-		when (STATE_AUTH) {
+		when (PROTO_MAGIC_AUTH) {
 			unless (exists $handle->{_mine}{user}) {
 				# reading username
 				my $ulen = unpack('C', $handle->{rbuf});
@@ -168,7 +162,7 @@ sub _cb_read {
 				
 				if (_can_auth($handle->{_mine}{host}, $handle->{_mine}{login}, $handle->{_mine}{password})) {
 					$handle->push_write("\01");
-					$handle->{_mine}{state} = STATE_WAITING;
+					$handle->{_mine}{state} = PROTO_MAGIC_WAITING;
 				}
 				else {
 					$handle->push_write("\00");
@@ -177,24 +171,24 @@ sub _cb_read {
 				}
 			}
 		}
-		when (STATE_EVENT_RCV) {
+		when (PROTO_MAGIC_EVENT_RCV) {
 			unless ($handle->{_mine}{event}) {
 				my $elen = unpack('C', $handle->{rbuf});
 				
 				if ($elen == 0) {
-					$handle->{_mine}{state} = STATE_WAITING;
+					$handle->{_mine}{state} = PROTO_MAGIC_WAITING;
 				}
 				elsif (length($handle->{rbuf}) > $elen) {
 					_strshift($handle->{rbuf});
 					$handle->{_mine}{event} = _strshift($handle->{rbuf}, $elen);
-					$handle->{_mine}{state} = STATE_WAITING;
+					$handle->{_mine}{state} = PROTO_MAGIC_WAITING;
 				}
 			}
 			else {
 				$handle->{rbuf} = '';
 			}
 		}
-		when (STATE_EVENT_REG) {
+		when (PROTO_MAGIC_EVENT_REG) {
 			my $elen = unpack('C', $handle->{rbuf});
 			
 			if (length($handle->{rbuf}) > $elen+4) {
@@ -204,7 +198,7 @@ sub _cb_read {
 				my $key = $ip.$event;
 				$self->{waiting}{$key} = $handle;
 				$self->{handles}{_$handle} = $key;
-				$handle->{_mine}{state} = STATE_WAITING;
+				$handle->{_mine}{state} = PROTO_MAGIC_WAITING;
 			}
 		}
 	}
