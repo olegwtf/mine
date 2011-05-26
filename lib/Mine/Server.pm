@@ -57,6 +57,8 @@ sub new {
 		$self->{cfg}{hosts}->load_optimized();
 	}
 	
+	$self->{plugins} = Mine::PluginManager->new();
+	
 	bless $self, $class;
 }
 
@@ -185,7 +187,15 @@ sub _cb_read {
 				}
 			}
 			else {
-				$handle->{rbuf} = '';
+				unless ($handle->{_mine}{datalen}) {
+					if (length($handle->{rbuf}) >= 8) {
+						$handle->{_mine}{datalen} = unpack('Q', _strshift($handle->{rbuf}, 8));
+					}
+				}
+				
+				if (length($handle->{rbuf}) > 0) {
+					# plug in
+				}
 			}
 		}
 		when (PROTO_MAGIC_EVENT_REG) {

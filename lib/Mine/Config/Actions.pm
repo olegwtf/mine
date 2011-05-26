@@ -56,8 +56,9 @@ Valid config form is:
 		action => [ # array of actions
 			{                                                       <-----------------|
 				'Plugin::method': null, # call method from Plugin without arguments   |
-				'Plugin::method', [ # with arguments                                  | # same
+				'Plugin::method': [ # with arguments                                  | # same
 					arg1, # scalar argument                                           |
+					# special arguments available: $EVENT, $DATA, $DATALEN            |
 					{	# argument may be a hash (method call inside method call) -----
 						
 					}

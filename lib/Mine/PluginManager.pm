@@ -41,17 +41,27 @@ sub unload {
 	"Mine::Plugin::$plugin"->unload();
 }
 
-sub exec {
-	my ($self, $stash, $sub) = splice @_, 0, 3;
+sub act {
+	my ($self, $stash, $actions) = splice @_, 0, 3;
 	
-	$self->load( substr($sub, 0, rindex($sub, '::')) );
-	$sub = "Mine::Plugin::$sub";
+	my %specvar;
+	@specvar{'$EVENT', '$DATALEN', '$DATA'} = \@_[0, 1, 2];
 	
-	if ('EV_SAFE' ~~ [attributes::get(\&{$sub})]) {
-		$sub->($stash, @_);
-	}
-	else {
-		# fork
+	while (my ($sub, $arg) = each %$actions) {
+		$self->load( substr($sub, 0, rindex($sub, '::')) );
+		$sub = "Mine::Plugin::$sub";
+		if ('EV_SAFE' ~~ [attributes::get(\&{$sub})]) {
+			$sub->(
+				$stash,
+				ref($arg) eq 'ARRAY' ?
+					map(
+						ref($_) eq 'HASH' ?
+							$self->act($stash, $_, @_) :
+							exists $specvar{$_} ? ${$specvar{$_}} : $_, @$arg
+					)
+					: exists $specvar{$arg} ? ${$specvar{$arg}} : $arg
+			);
+		}
 	}
 }
 
