@@ -194,7 +194,52 @@ sub _cb_read {
 				}
 				
 				if (length($handle->{rbuf}) > 0) {
-					# plug in
+					my @actions_array;
+					if (my $act_sender = $self->{cfg}{actions}{optimized}{senders}{$handle->{_mine}{host}}) {
+						push @actions_array, [@$act_sender];
+					}
+					if (my $act_user = $self->{cfg}{actions}{optimized}{users}{$handle->{_mine}{user}}) {
+						push @actions_array, [@$act_user];
+					}
+					if (my $act_event = $self->{cfg}{actions}{optimized}{events}{$handle->{_mine}{event}}) {
+						push @actions_array, [@$act_event];
+					}
+					my $netmask = $self->{cfg}{actions}{optimized}{netmask};
+					
+					my @acting;
+					my ($i, $j) = (0, 0);
+					foreach my $actions (@actions_array) {
+						foreach my $action (@$actions) {
+							my $cond = $action->{condcnt} - 1;
+							for ($j=$i; $cond>0, $j<@actions_array; $j++) {
+								if ((my $index = _arrayindex($actions_array[$j], $action)) != -1) {
+									$cond--;
+									splice @{$actions_array[$j]}, $index, 1; # delete used action
+								}
+							}
+							
+							if ($cond > 0) {
+								for ($j=0; $j<@$netmask; $j+=3) {
+									if ($action == $netmask->[$j+2] &&
+									    ip_belongs_net($handle->{_mine}{host}, $netmask->[$j], $netmask->[$j+1])) {
+										$cond--;
+										last;
+									}
+								}
+							}
+							
+							if ($cond <= 0) {
+								push @acting, $action->{action};
+							}
+						}
+						
+						$i++;
+					}
+					
+					push @acting, @{$self->{cfg}{actions}{optimized}{actions}};
+					foreach my $act (@acting) {
+						$self->{plugins}->act($handle->{_mine}{stash}, $act);
+					}
 				}
 			}
 		}
@@ -261,6 +306,20 @@ sub _strshift($$;$) {
 		
 	substr($_[0], 0, defined($_[1]) ? $_[1] : 1) = '';
 	$rv;
+}
+
+sub _arrindex($$) {
+	my ($array, $elt) = @_;
+	
+	my $i = 0;
+	foreach my $e (@$array) {
+		if ($e eq $elt) {
+			return $i;
+		}
+		$i++;
+	}
+	
+	return -1;
 }
 
 1;

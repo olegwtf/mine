@@ -149,7 +149,7 @@ Returned config form will be:
 
 	{
 		senders => {
-			s1 => [act1, ..., actn], # act: {action => hashreftoact, condcnt => numberofconditions}
+			s1 => [act1, ..., actn], # act: {action => arrayreftoact, condcnt => numberofconditions}
 			...
 			s2 => [act1, ..., actn]
 		},
