@@ -4,6 +4,7 @@ use strict;
 use AnyEvent::Handle;
 use AnyEvent::Socket;
 use Mine::Protocol;
+use Mine::Constants;
 use base Mine::Plugin::;
 
 sub send : EV_SAFE {
@@ -33,7 +34,7 @@ sub send : EV_SAFE {
 	
 	if(!exists($stash->{handles}{$nr}) || $stash->{handles}{$nr}->destroyed) {
 		$stash->{handles}{$nr} = AnyEvent::Handle->new(
-			connect => [$recipient, 1135], # FIXME
+			connect => [$recipient, DEFAULT_PORT], # FIXME
 			on_error => sub {},
 			on_eof   => sub {}
 		);
