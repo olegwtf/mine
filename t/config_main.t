@@ -23,11 +23,31 @@ my $json;
 $json = '[false]';
 ok(!eval{Mine::Config::Main->new(\$json)}, "Incorrect config: $json");
 # correct
-$json = '{}';
-ok(eval{Mine::Config::Main->new(\$json)}, "Correct config: $json")
+$json = '{"bind_port": 85}';
+ok(eval{Mine::Config::Main->new(\$json)}, "Minimal correct config: $json")
 	or diag $@;
-
-# TODO more format tests
+# incorrect bind port
+$json = '{"bind_port": 90000}';
+like(eval{Mine::Config::Main->new(\$json)}||$@, qr/65536/, "Too big `bind_port': $json")
+	or diag $@;
+$json = '{"bind_port": "port"}';
+like(eval{Mine::Config::Main->new(\$json)}||$@, qr/numeric/, "Not numeric `bind_port': $json")
+	or diag $@;
+# complete correct config
+$json = <<JSON;
+{
+	"bind_port": 90,
+	"bind_address": "192.168.0.1",
+	"ssl": false,
+	"ipauth": true
+}
+JSON
+ok(eval{Mine::Config::Main->new(\$json)}, "Complete correct config: $json")
+	or diag $@;
+# number instead of boolean
+$json = '{"ssl":"bool", "bind_port":30}';
+like(eval{Mine::Config::Main->new(\$json)}||$@, qr/true or false/, "Not boolean `ssl' value: $json")
+	or diag $@;
 
 # saving invalid data config
 like(
