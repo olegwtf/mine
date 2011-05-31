@@ -10,6 +10,7 @@ use Mine::Config::Main;
 use Mine::Config::Actions;
 use Mine::Config::Users;
 use Mine::Utils::IP qw(host2long ip_belongs_net);
+use Mine::Constants;
 use Mine::Protocol;
 use Mine::PluginManager;
 
@@ -82,7 +83,7 @@ sub _cb_accept {
 		push(
 			@conn_opts, "\01",
 			tls => 'accept',
-			tls_ctx => {cert_file => '/tmp/ca.crt', key_file => '/tmp/ca.key'} # XXX
+			tls_ctx => {cert_file => CERT_PATH . '/mine.crt', key_file => CERT_PATH . '/mine.key'}
 		);
 	}
 	else {
