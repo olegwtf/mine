@@ -1,13 +1,38 @@
 #include "mine.h"
 
-void _set_sys_error(mine *self) {
+void _mine_set_sys_error(mine *self) {
 	self->err  = errno;
 	self->errstr = strerror(errno);
 }
 
-void _set_ssl_error(mine *self) {
+void _mine_set_ssl_error(mine *self) {
 	self->err = 0;
 	self->errstr = ERR_lib_error_string( ERR_get_error() );
+}
+
+void _mine_set_error(mine *self) {
+	if (self->ssl) {
+		_mine_set_ssl_error(self);
+	}
+	else {
+		_mine_set_sys_error(self);
+	}
+}
+
+int _mine_write(mine *self, const void *msg, size_t len) {
+	if (self->ssl) {
+		return SSL_write(self->ssl, msg, len);
+	}
+	
+	return send(self->sock, msg, len, MSG_NOSIGNAL);
+}
+
+int _mine_read(mine *self, void *buf, size_t len) {
+	if (self->ssl) {
+		return SSL_read(self->ssl, buf, len);
+	}
+	
+	return recv(self->sock, buf, len, 0);
 }
 
 mine *mine_new() {
@@ -101,11 +126,11 @@ char mine_connect(mine *self, char *host, uint16_t port) {
 	
 	
 	MINE_CONNECT_ERROR_SYS:
-		_set_sys_error(self);
+		_mine_set_sys_error(self);
 		goto MINE_CONNECT_ERROR;
 	
 	MINE_CONNECT_ERROR_SSL:
-		_set_ssl_error(self);
+		_mine_set_ssl_error(self);
 		goto MINE_CONNECT_ERROR;
 	
 	MINE_CONNECT_ERROR:
@@ -122,7 +147,33 @@ char mine_disconnect(mine *self) {
 	}
 	
 	if (close(self->sock) == -1) {
-		_set_sys_error(self);
+		_mine_set_sys_error(self);
+		return 0;
+	}
+	
+	return 1;
+}
+
+char mine_login(mine *self, char *login, char *password) {
+	unsigned char login_len = login ? strlen(login) : 0;
+	unsigned char password_len = password ? strlen(password) : 0;
+	
+	char buf[login_len+password_len+3];
+	sprintf(buf, "%c%s%c%s", login_len, login ? login : "", password_len, password ? password : "");
+	if (_mine_write(self, buf, strlen(buf)) <= 0) {
+		_mine_set_error(self);
+		return 0;
+	}
+	
+	char login_status;
+	if (_mine_read(self, &login_status, 1) <= 0) {
+		_mine_set_error(self);
+		return 0;
+	}
+	
+	if (login_status == MINE_LOGIN_FAIL) {
+		self->err = 0;
+		self->errstr = "Login failed";
 		return 0;
 	}
 	
