@@ -179,3 +179,16 @@ char mine_login(mine *self, char *login, char *password) {
 	
 	return 1;
 }
+
+char mine_event_reg(mine *self, char *event, char *ip) {
+	unsigned char event_len = strlen(event);
+	
+	char buf[event_len+6];
+	sprintf(buf, "%c%s%s", event_len, event, ip); // FIXME ip -> long
+	if (_mine_write(self, buf, strlen(buf)) <= 0) {
+		_mine_set_error(self);
+		return 0;
+	}
+	
+	return 1;
+}

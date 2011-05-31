@@ -31,7 +31,7 @@ void mine_destroy(mine *self);
 char mine_connect(mine *self, char *host, uint16_t port);
 char mine_disconnect(mine *self);
 char mine_login(mine *self, char *login, char *password);
-// char mine_event_reg(mconn conn, char *event, char *ip);
+char mine_event_reg(mine *self, char *event, char *ip);
 // char mine_event_send(mconn conn, char *event, char *data);
 // char *mine_event_read(mconn conn);
 
