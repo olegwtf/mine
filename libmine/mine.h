@@ -8,6 +8,7 @@
 #include <openssl/ssl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <openssl/bio.h>
@@ -17,6 +18,7 @@
 #define MINE_PROTO_SSL   1
 #define MINE_LOGIN_FAIL  0
 #define MINE_LOGIN_OK    1
+#define MINE_MAGIC_AUTH  1
 
 typedef struct mine {
 	int sock;

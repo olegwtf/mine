@@ -14,6 +14,8 @@ use Mine::Constants;
 use Mine::Protocol;
 use Mine::PluginManager;
 
+use constant DEBUG => $ENV{MINE_DEBUG};
+
 # some prototypes
 sub _($);
 
@@ -163,12 +165,12 @@ sub _cb_read {
 					return;
 				}
 				
-				if (_can_auth($handle->{_mine}{host}, $handle->{_mine}{login}, $handle->{_mine}{password})) {
-					$handle->push_write("\01");
+				if (_can_auth($handle->{_mine}{host}, $handle->{_mine}{user}, $handle->{_mine}{password})) {
+					$handle->push_write(pack('C', PROTO_AUTH_SUCCESS));
 					$handle->{_mine}{state} = PROTO_MAGIC_WAITING;
 				}
 				else {
-					$handle->push_write("\00");
+					$handle->push_write(pack('C', PROTO_AUTH_FAILED));
 					delete $self->{handles}{_$handle};
 					$handle->destroy();
 				}
@@ -271,8 +273,9 @@ sub _cb_error {
 #### other routines ####
 sub _can_auth($$$) {
 	my ($host, $login, $password) = @_;
+	DEBUG && warn "_can_auth($host, $login, $password)";
 	
-	if ($login && $self->{cfg}{users}{data}{$login} eq md5_hex($login)) {
+	if ($login && $self->{cfg}{users}{data}{$login} eq md5_hex($password)) {
 		# auth by password ok
 		return 1;
 	}

@@ -1,3 +1,5 @@
+.PHONY: test
+
 cc = gcc
 
 all: lib test

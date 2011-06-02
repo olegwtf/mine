@@ -158,9 +158,10 @@ char mine_login(mine *self, char *login, char *password) {
 	unsigned char login_len = login ? strlen(login) : 0;
 	unsigned char password_len = password ? strlen(password) : 0;
 	
-	char buf[login_len+password_len+3];
+	int msg_len = login_len+password_len+2;
+	char buf[msg_len];
 	sprintf(buf, "%c%s%c%s", login_len, login ? login : "", password_len, password ? password : "");
-	if (_mine_write(self, buf, strlen(buf)) <= 0) {
+	if (_mine_write(self, buf, msg_len) <= 0) {
 		_mine_set_error(self);
 		return 0;
 	}
@@ -183,9 +184,14 @@ char mine_login(mine *self, char *login, char *password) {
 char mine_event_reg(mine *self, char *event, char *ip) {
 	unsigned char event_len = strlen(event);
 	
-	char buf[event_len+6];
-	sprintf(buf, "%c%s%s", event_len, event, ip); // FIXME ip -> long
-	if (_mine_write(self, buf, strlen(buf)) <= 0) {
+	struct in_addr addr;
+	inet_aton(ip, &addr); // FIXME
+	
+	int msg_len = event_len+5;
+	char buf[msg_len];
+	sprintf(buf, "%c%s", event_len, event);
+	memcpy(buf+event_len+1, &(addr.s_addr), 4);
+	if (_mine_write(self, buf, msg_len) <= 0) {
 		_mine_set_error(self);
 		return 0;
 	}

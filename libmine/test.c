@@ -6,6 +6,12 @@ int main() {
 	
 	if (mine_connect(m, "localhost", 1135)) {
 		printf("Successfully connected. %s protocol\n", m->ssl ? "SSL" : "Plain");
+		if (mine_login(m, "root", "toor")) {
+			printf("Successfully logged in\n");
+		}
+		else {
+			printf("Login error: %s\n", m->errstr);
+		}
 		mine_disconnect(m);
 	}
 	else {
