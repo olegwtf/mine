@@ -14,11 +14,12 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 
-#define MINE_PROTO_PLAIN 0
-#define MINE_PROTO_SSL   1
-#define MINE_LOGIN_FAIL  0
-#define MINE_LOGIN_OK    1
-#define MINE_MAGIC_AUTH  1
+#define MINE_PROTO_PLAIN     0
+#define MINE_PROTO_SSL       1
+#define MINE_LOGIN_FAIL      0
+#define MINE_LOGIN_OK        1
+#define MINE_MAGIC_AUTH      1
+#define MINE_MAGIC_EVENT_REG 3
 
 typedef struct mine {
 	int sock;

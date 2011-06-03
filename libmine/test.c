@@ -8,6 +8,13 @@ int main() {
 		printf("Successfully connected. %s protocol\n", m->ssl ? "SSL" : "Plain");
 		if (mine_login(m, "root", "toor")) {
 			printf("Successfully logged in\n");
+			
+			if (mine_event_reg(m, "EV_COME", "0.0.0.0")) {
+				printf("Event successfully registered\n");
+			}
+			else {
+				printf("Event registration error: %s\n", m->errstr);
+			}
 		}
 		else {
 			printf("Login error: %s\n", m->errstr);

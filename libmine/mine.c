@@ -185,12 +185,15 @@ char mine_event_reg(mine *self, char *event, char *ip) {
 	unsigned char event_len = strlen(event);
 	
 	struct in_addr addr;
-	inet_aton(ip, &addr); // FIXME
+	if (!inet_aton(ip, &addr)) {
+		_mine_set_sys_error(self);
+		return 0;
+	}
 	
-	int msg_len = event_len+5;
+	int msg_len = event_len+6;
 	char buf[msg_len];
-	sprintf(buf, "%c%s", event_len, event);
-	memcpy(buf+event_len+1, &(addr.s_addr), 4);
+	sprintf(buf, "%c%c%s", MINE_MAGIC_EVENT_REG, event_len, event);
+	memcpy(buf+event_len+2, &(addr.s_addr), 4);
 	if (_mine_write(self, buf, msg_len) <= 0) {
 		_mine_set_error(self);
 		return 0;
