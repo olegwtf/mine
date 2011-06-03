@@ -6,13 +6,13 @@
 #include <string.h>
 #include <errno.h>
 #include <openssl/ssl.h>
+#include <openssl/bio.h>
+#include <openssl/err.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#include <openssl/bio.h>
-#include <openssl/err.h>
 
 #define MINE_PROTO_PLAIN     0
 #define MINE_PROTO_SSL       1
@@ -20,6 +20,10 @@
 #define MINE_LOGIN_OK        1
 #define MINE_MAGIC_AUTH      1
 #define MINE_MAGIC_EVENT_REG 3
+#define MINE_MAGIC_EVENT_SND 2
+#define MINE_MAGIC_DATA      0
+
+char MINE_SSL_LOADED = 0;
 
 typedef struct mine {
 	int sock;
@@ -27,6 +31,8 @@ typedef struct mine {
 	SSL_CTX *ctx;
 	int err;
 	const char *errstr;
+	char *event;
+	uint64_t datalen;
 } mine;
 
 mine *mine_new();
@@ -35,8 +41,8 @@ char mine_connect(mine *self, char *host, uint16_t port);
 char mine_disconnect(mine *self);
 char mine_login(mine *self, char *login, char *password);
 char mine_event_reg(mine *self, char *event, char *ip);
-// char mine_event_send(mconn conn, char *event, char *data);
-// char *mine_event_read(mconn conn);
+char mine_event_send(mine *self, char *event, uint64_t datalen, char *data);
+// char *mine_event_recv(mconn conn);
 
 
 #endif // MINE_H

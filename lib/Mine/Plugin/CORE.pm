@@ -16,11 +16,11 @@ sub send : EV_SAFE {
 		
 		if ($response eq "\01") {
 			if (defined $event) {
-				$handle->push_write(pack('CCa*', PROTO_MAGIC_EVENT_RCV, length($event), $event));
+				$handle->push_write(pack('CCa*', PROTO_MAGIC_EVENT_SND, length($event), $event));
 			}
 			
 			if (defined $datalen) {
-				$handle->push_write(pack('CQ', $datalen));
+				$handle->push_write(pack('CQ', PROTO_MAGIC_DATA, $datalen));
 			}
 			
 			if (defined $data) {

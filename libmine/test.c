@@ -11,6 +11,22 @@ int main() {
 			
 			if (mine_event_reg(m, "EV_COME", "0.0.0.0")) {
 				printf("Event successfully registered\n");
+				
+				if (mine_event_send(m, "EV_SUX", 10, "abcdefghij")) {
+					printf("Event successfully sent\n");
+					
+					mine *m1 = mine_new();
+					if (mine_connect(m1, "localhost", 1135)) {
+						printf("Successfully connected. %s protocol\n", m->ssl ? "SSL" : "Plain");
+					}
+					else {
+						printf("Connection error: %s\n", m->errstr);
+					}
+					mine_destroy(m1);
+				}
+				else {
+					printf("Error while sending event: %s\n", m->errstr);
+				}
 			}
 			else {
 				printf("Event registration error: %s\n", m->errstr);

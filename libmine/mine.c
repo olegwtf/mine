@@ -47,6 +47,8 @@ mine *mine_new() {
 	self->ctx     = NULL;
 	self->err     = 0;
 	self->errstr  = NULL;
+	self->event   = NULL;
+	self->datalen = 0;
 	
 	return self;
 }
@@ -94,8 +96,11 @@ char mine_connect(mine *self, char *host, uint16_t port) {
 	}
 	
 	if (protocol == MINE_PROTO_SSL) {
-		SSL_library_init();
-		SSL_load_error_strings();
+		if (!MINE_SSL_LOADED) {
+			SSL_library_init();
+			SSL_load_error_strings();
+			MINE_SSL_LOADED = 1;
+		}
 		
 		ctx = SSL_CTX_new( SSLv23_method() );
 		if (!ctx) { 
@@ -199,5 +204,48 @@ char mine_event_reg(mine *self, char *event, char *ip) {
 		return 0;
 	}
 	
+	return 1;
+}
+
+char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
+	if (self->event == NULL || strcmp(event, self->event) != 0) {
+		if (self->datalen != 0) {
+			self->err = 0;
+			self->errstr = "Incomplete data remain from previous event";
+			return 0;
+		}
+		
+		if (self->event != NULL) {
+			free(self->event);
+		}
+		self->event = strdup(event);
+		int event_len = strlen(event);
+		int msg_len = event_len + 2;
+		char buf[msg_len];
+		sprintf(buf, "%c%c%s", MINE_MAGIC_EVENT_SND, event_len, event);
+		if (_mine_write(self, buf, msg_len) <= 0) {
+			_mine_set_error(self);
+			return 0;
+		}
+	}
+	
+	if (self->datalen == 0) {
+		self->datalen = datalen;
+		char buf[9];
+		sprintf(buf, "%c", MINE_MAGIC_DATA);
+		memcpy(buf+1, &datalen, 8);
+		if (_mine_write(self, buf, 9) <= 0) {
+			_mine_set_error(self);
+			return 0;
+		}
+	}
+	
+	uint64_t chunklen = strlen(data);
+	if (_mine_write(self, data, chunklen) <= 0) {
+		_mine_set_error(self);
+		return 0;
+	}
+	
+	self->datalen -= chunklen;
 	return 1;
 }
