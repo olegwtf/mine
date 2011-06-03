@@ -47,8 +47,9 @@ mine *mine_new() {
 	self->ctx     = NULL;
 	self->err     = 0;
 	self->errstr  = NULL;
-	self->event   = NULL;
-	self->datalen = 0;
+	self->snd_event   = NULL;
+	self->snd_datalen = 0;
+	self->rcv_datalen = 0;
 	
 	return self;
 }
@@ -208,17 +209,17 @@ char mine_event_reg(mine *self, char *event, char *ip) {
 }
 
 char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
-	if (self->event == NULL || strcmp(event, self->event) != 0) {
-		if (self->datalen != 0) {
+	if (self->snd_event == NULL || strcmp(event, self->snd_event) != 0) {
+		if (self->snd_datalen != 0) {
 			self->err = 0;
 			self->errstr = "Incomplete data remain from previous event";
 			return 0;
 		}
 		
-		if (self->event != NULL) {
-			free(self->event);
+		if (self->snd_event != NULL) {
+			free(self->snd_event);
 		}
-		self->event = strdup(event);
+		self->snd_event = strdup(event);
 		int event_len = strlen(event);
 		int msg_len = event_len + 2;
 		char buf[msg_len];
@@ -229,8 +230,8 @@ char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
 		}
 	}
 	
-	if (self->datalen == 0) {
-		self->datalen = datalen;
+	if (self->snd_datalen == 0) {
+		self->snd_datalen = datalen;
 		char buf[9];
 		sprintf(buf, "%c", MINE_MAGIC_DATA);
 		memcpy(buf+1, &datalen, 8);
@@ -246,6 +247,10 @@ char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
 		return 0;
 	}
 	
-	self->datalen -= chunklen;
+	self->snd_datalen -= chunklen;
 	return 1;
+}
+
+uint64_t mine_event_recv(mine *self, char *event, char *buf) {
+	
 }

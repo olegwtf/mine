@@ -31,8 +31,10 @@ typedef struct mine {
 	SSL_CTX *ctx;
 	int err;
 	const char *errstr;
-	char *event;
-	uint64_t datalen;
+	char *snd_event;
+	char *rcv_event;
+	uint64_t snd_datalen;
+	uint64_t rcv_datalen;
 } mine;
 
 mine *mine_new();
@@ -42,7 +44,6 @@ char mine_disconnect(mine *self);
 char mine_login(mine *self, char *login, char *password);
 char mine_event_reg(mine *self, char *event, char *ip);
 char mine_event_send(mine *self, char *event, uint64_t datalen, char *data);
-// char *mine_event_recv(mconn conn);
-
+uint64_t mine_event_recv(mine *self, char *event, char *buf);
 
 #endif // MINE_H
