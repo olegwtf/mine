@@ -20,7 +20,7 @@ sub send : EV_SAFE {
 			}
 			
 			if (defined $datalen) {
-				$handle->push_write(pack('CQ', PROTO_DATA, $datalen));
+				$handle->push_write(pack('CQ', PROTO_DATA_SND, $datalen));
 			}
 			
 			if (defined $data) {

@@ -14,6 +14,22 @@ use Mine::Constants;
 use Mine::Protocol;
 use Mine::PluginManager;
 
+=head1 NAME
+
+Mine::Server - Mine server class (singleton)
+
+=cut
+
+=head1 ENVIRONMENT
+
+=over
+
+=item MINE_DEBUG
+
+=back
+
+=cut
+
 use constant DEBUG => $ENV{MINE_DEBUG};
 
 # some prototypes
@@ -21,6 +37,12 @@ sub _($);
 
 # We are Singleton
 my $self;
+
+=head1 METHODS
+
+=head2 new()
+
+=cut
 
 sub new {
 	my ($class, %cfg) = @_;
@@ -65,6 +87,12 @@ sub new {
 	bless $self, $class;
 }
 
+=head2 start()
+
+Start the server
+
+=cut
+
 sub start {
 	tcp_server(
 		$self->{cfg}{main}{data}{bind_address},
@@ -76,20 +104,40 @@ sub start {
 	$self->{loop}->recv;
 }
 
+
 #### callbacks ####
+
+=head1 PROTOCOL
+
+=head2 Accepting connections
+
+After client connection server sends to client connection
+type 1 byte longwithout any encryption. Connection type can be
+PROTO_SSL or PROTO_PLAIN. If connection type is PROTO_SSL then server
+starts ssl handshaking, so client should start ssl handshaking
+too:
+
+  +--------------------------+
+  |            1             |
+  +--------------------------+
+  | PROTO_SSL or PROTO_PLAIN |
+  +--------------------------+
+
+=cut
+
 sub _cb_accept {
 	my ($sock, $host) = @_;
 	
 	my @conn_opts;
 	if ($self->{cfg}{main}{data}{ssl}) {
 		push(
-			@conn_opts, "\01",
+			@conn_opts, pack('C', PROTO_SSL),
 			tls => 'accept',
 			tls_ctx => {cert_file => CERT_PATH . '/mine.crt', key_file => CERT_PATH . '/mine.key'}
 		);
 	}
 	else {
-		push @conn_opts, "\00";
+		push @conn_opts, pack('C', PROTO_PLAIN);
 	}
 	
 	# XXX: Could this write fail somewhere?
@@ -116,22 +164,35 @@ sub _cb_read {
 	given ($handle->{_mine}{state}) {
 		when (PROTO_WAITING) {
 			my $state = unpack('C', _strshift($handle->{rbuf}));
-			given ($state) {
-				when (PROTO_EVENT_RCV) {
-					$handle->{_mine}{event} = undef;
-				}
-				when (PROTO_DATA) {
-					# continuation of the event data
-					$state = PROTO_EVENT_RCV;
-				}
-				default {
-					return;
-				}
-			}
 			
 			$handle->{_mine}{state} = $state;
 			goto &_cb_read if length $handle->{rbuf} > 0;
 		}
+
+=head2 Authorization
+
+Right after connection client should send username and password.
+Username and passsword could be empty:
+
+  +------------+------+-------+------+-------+
+  |     1      |   1  | 0-255 |   1  | 0-255 |
+  -------------+------+-------+------+-------+
+  | PROTO_AUTH | ulen | user  | plen | pass  |
+  +------------+------+-------+------+-------+
+
+Server response contains information about login success or fail.
+If login failed server immediately close connection:
+
+  +-----------------------------------------+
+  |                   1                     |
+  +-----------------------------------------+
+  | PROTO_AUTH_SUCCESS or PROTO_AUTH_FAILED |
+  +-----------------------------------------+
+
+If authorization by ip enabled and client ip marked as allowed
+server must admit such client.
+
+=cut
 		when (PROTO_AUTH) {
 			unless (exists $handle->{_mine}{user}) {
 				# reading username
@@ -176,73 +237,129 @@ sub _cb_read {
 				}
 			}
 		}
+
+=head2 Event receiving
+
+Event from the client format should be:
+
+  +------+--------+
+  |   1  |  1-255 |
+  +------+--------+
+  | elen |  event |
+  +------+--------+
+
+After that actions associated with this event in the config will be
+invoked througn L<Mine::PluginManager|Mine::PluginManager> class.
+Special arguments state:
+
+=over
+
+=item $EVENT = event
+
+=item $DATALEN = undef
+
+=item $DATA = undef
+
+=back
+
+Event will be resent to all subscribers except sender.
+
+=cut
 		when (PROTO_EVENT_RCV) {
-			unless ($handle->{_mine}{event}) {
-				my $elen = unpack('C', $handle->{rbuf});
+			my $elen = unpack('C', $handle->{rbuf});
+			if (length($handle->{rbuf}) > $elen) {
+				_strshift($handle->{rbuf});
+				$handle->{_mine}{event} = _strshift($handle->{rbuf}, $elen);
+				$handle->{_mine}{state} = PROTO_WAITING;
 				
-				if ($elen == 0) {
-					$handle->{_mine}{state} = PROTO_WAITING;
-				}
-				elsif (length($handle->{rbuf}) > $elen) {
-					_strshift($handle->{rbuf});
-					$handle->{_mine}{event} = _strshift($handle->{rbuf}, $elen);
-					$handle->{_mine}{state} = PROTO_WAITING;
-				}
+				_resend_event($handle);
+			}
+		}
+		
+=head2 Event data receiving
+
+=cut
+		when (PROTO_DATA_RCV) {
+			
+			my @specvars;
+			unless ($handle->{_mine}{event}) {
+				
 			}
 			else {
-				unless ($handle->{_mine}{datalen}) {
+				push @specvars, undef;
+			}
+			
+			if ($handle->{rbuf} > 0) {
+				if (!$handle->{_mine}{datalen}) {
 					if (length($handle->{rbuf}) >= 8) {
 						$handle->{_mine}{datalen} = unpack('Q', _strshift($handle->{rbuf}, 8));
+						push @specvars, $handle->{_mine}{datalen};
+					}
+					else {
+						$handle->{_mine}{state} = PROTO_WAITING;
+						return;
 					}
 				}
+				else {
+					push @specvars, undef;
+				}
+			}
+			
+			if ((my $buflen = length($handle->{rbuf})) > 0) {
+				my $bytes = $buflen > $handle->{_mine}{datalen} ? $handle->{_mine}{datalen} : $buflen;
+				push @specvars, _strshift($handle->{rbuf}, $bytes);
+				$handle->{_mine}{datalen} -= $bytes;
+			}
+			else {
+				push @specvars, undef;
+			}
+			
+			if (grep defined, @specvars) {
+				my @actions_array;
+				if (my $act_sender = $self->{cfg}{actions}{optimized}{senders}{$handle->{_mine}{host}}) {
+					push @actions_array, [@$act_sender];
+				}
+				if (my $act_user = $self->{cfg}{actions}{optimized}{users}{$handle->{_mine}{user}}) {
+					push @actions_array, [@$act_user];
+				}
+				if (my $act_event = $self->{cfg}{actions}{optimized}{events}{$handle->{_mine}{event}}) {
+					push @actions_array, [@$act_event];
+				}
+				my $netmask = $self->{cfg}{actions}{optimized}{netmask};
 				
-				if (length($handle->{rbuf}) > 0) {
-					my @actions_array;
-					if (my $act_sender = $self->{cfg}{actions}{optimized}{senders}{$handle->{_mine}{host}}) {
-						push @actions_array, [@$act_sender];
-					}
-					if (my $act_user = $self->{cfg}{actions}{optimized}{users}{$handle->{_mine}{user}}) {
-						push @actions_array, [@$act_user];
-					}
-					if (my $act_event = $self->{cfg}{actions}{optimized}{events}{$handle->{_mine}{event}}) {
-						push @actions_array, [@$act_event];
-					}
-					my $netmask = $self->{cfg}{actions}{optimized}{netmask};
-					
-					my @acting;
-					my ($i, $j) = (0, 0);
-					foreach my $actions (@actions_array) {
-						foreach my $action (@$actions) {
-							my $cond = $action->{condcnt} - 1;
-							for ($j=$i; $cond>0, $j<@actions_array; $j++) {
-								if ((my $index = _arrayindex($actions_array[$j], $action)) != -1) {
-									$cond--;
-									splice @{$actions_array[$j]}, $index, 1; # delete used action
-								}
-							}
-							
-							if ($cond > 0) {
-								for ($j=0; $j<@$netmask; $j+=3) {
-									if ($action == $netmask->[$j+2] &&
-									    ip_belongs_net($handle->{_mine}{host}, $netmask->[$j], $netmask->[$j+1])) {
-										$cond--;
-										last;
-									}
-								}
-							}
-							
-							if ($cond <= 0) {
-								push @acting, $action->{action};
+				my @acting;
+				my ($i, $j) = (0, 0);
+				foreach my $actions (@actions_array) {
+					foreach my $action (@$actions) {
+						my $cond = $action->{condcnt} - 1;
+						for ($j=$i; $cond>0, $j<@actions_array; $j++) {
+							if ((my $index = _arrayindex($actions_array[$j], $action)) != -1) {
+								$cond--;
+								splice @{$actions_array[$j]}, $index, 1; # delete used action
 							}
 						}
 						
-						$i++;
+						if ($cond > 0) {
+							for ($j=0; $j<@$netmask; $j+=3) {
+								if ($action == $netmask->[$j+2] &&
+									ip_belongs_net($handle->{_mine}{host}, $netmask->[$j], $netmask->[$j+1])) {
+									$cond--;
+									last;
+								}
+							}
+						}
+						
+						if ($cond <= 0) {
+							push @acting, $action->{action};
+						}
 					}
 					
-					push @acting, @{$self->{cfg}{actions}{optimized}{actions}};
-					foreach my $act (@acting) {
-						$self->{plugins}->act($handle->{_mine}{stash}, $act);
-					}
+					$i++;
+				}
+				
+				push @acting, @{$self->{cfg}{actions}{optimized}{actions}};
+				foreach my $act (@acting) {
+					$self->{plugins}->act($handle->{_mine}{stash}, $act, );
 				}
 			}
 		}
@@ -254,7 +371,7 @@ sub _cb_read {
 					unpack('C2a'.$elen.'a4', _strshift($handle->{rbuf}, $elen+5));
 					
 				my $key = $ip.$event;
-				$self->{waiting}{$key}{_$handle} = 1;
+				$self->{waiting}{$key}{_$handle} = $handle;
 				$self->{handles}{_$handle} = $key;
 				$handle->{_mine}{state} = PROTO_WAITING;
 			}
@@ -300,11 +417,26 @@ sub _can_auth($$$) {
 	return 0;
 }
 
+sub _resend_event($) {
+	my $handle = shift;
+	
+	foreach my $key (
+		pack('Na*', $handle->{_mine}{host}, $handle->{_mine}{event}), # ip + event
+		"\0\0\0\0" . $handle->{_mine}{event}                          # any_ip + event
+	) {
+		if (exists $self->{waiting}{$key}) {
+			while (my (undef, $w_handle) = each %{$self->{waiting}{$key}}) {
+				$w_handle->push_write(pack('Ca*', PROTO_EVENT_SND, $handle->{_mine}{event}));
+			}
+		}
+	}
+}
+
 sub _($) {
 	substr($_[0], 22, -1);
 }
 
-sub _strshift($$;$) {
+sub _strshift($$) {
 	my $rv = substr($_[0], 0, defined($_[1]) ? $_[1] : 1)
 		if defined wantarray();
 		
