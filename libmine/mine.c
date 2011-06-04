@@ -198,7 +198,7 @@ char mine_event_reg(mine *self, char *event, char *ip) {
 	
 	int msg_len = event_len+6;
 	char buf[msg_len];
-	sprintf(buf, "%c%c%s", MINE_MAGIC_EVENT_REG, event_len, event);
+	sprintf(buf, "%c%c%s", MINE_PROTO_EVENT_REG, event_len, event);
 	memcpy(buf+event_len+2, &(addr.s_addr), 4);
 	if (_mine_write(self, buf, msg_len) <= 0) {
 		_mine_set_error(self);
@@ -223,7 +223,7 @@ char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
 		int event_len = strlen(event);
 		int msg_len = event_len + 2;
 		char buf[msg_len];
-		sprintf(buf, "%c%c%s", MINE_MAGIC_EVENT_SND, event_len, event);
+		sprintf(buf, "%c%c%s", MINE_PROTO_EVENT_SND, event_len, event);
 		if (_mine_write(self, buf, msg_len) <= 0) {
 			_mine_set_error(self);
 			return 0;
@@ -233,7 +233,7 @@ char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
 	if (self->snd_datalen == 0) {
 		self->snd_datalen = datalen;
 		char buf[9];
-		sprintf(buf, "%c", MINE_MAGIC_DATA);
+		sprintf(buf, "%c", MINE_PROTO_DATA);
 		memcpy(buf+1, &datalen, 8);
 		if (_mine_write(self, buf, 9) <= 0) {
 			_mine_set_error(self);

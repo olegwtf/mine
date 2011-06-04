@@ -16,11 +16,11 @@ sub send : EV_SAFE {
 		
 		if ($response eq "\01") {
 			if (defined $event) {
-				$handle->push_write(pack('CCa*', PROTO_MAGIC_EVENT_SND, length($event), $event));
+				$handle->push_write(pack('CCa*', PROTO_EVENT_SND, length($event), $event));
 			}
 			
 			if (defined $datalen) {
-				$handle->push_write(pack('CQ', PROTO_MAGIC_DATA, $datalen));
+				$handle->push_write(pack('CQ', PROTO_DATA, $datalen));
 			}
 			
 			if (defined $data) {
@@ -43,7 +43,7 @@ sub send : EV_SAFE {
 		my $p_len = length $password;
 		
 		$stash->{handles}{$nr}->push_write(
-			pack("CCa${l_len}Ca${p_len}", PROTO_MAGIC_AUTH, $l_len, $login, $p_len, $password)
+			pack("CCa${l_len}Ca${p_len}", PROTO_AUTH, $l_len, $login, $p_len, $password)
 		);
 		$stash->{handles}{$nr}->push_read(chunk => 1, $send_auth);
 	}
