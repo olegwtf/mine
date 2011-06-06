@@ -14,14 +14,17 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
-#define MINE_PROTO_PLAIN     0
-#define MINE_PROTO_SSL       1
-#define MINE_LOGIN_FAIL      0
-#define MINE_LOGIN_OK        1
-#define MINE_PROTO_AUTH      1
-#define MINE_PROTO_EVENT_REG 3
-#define MINE_PROTO_EVENT_SND 2
-#define MINE_PROTO_DATA      0
+#define MINE_PROTO_PLAIN        0
+#define MINE_PROTO_SSL          1
+#define MINE_PROTO_DATA_RCV     0
+#define MINE_PROTO_DATA_SND     0
+#define MINE_PROTO_AUTH         1
+#define MINE_PROTO_EVENT_RCV    2
+#define MINE_PROTO_EVENT_SND    2
+#define MINE_PROTO_EVENT_REG    3
+#define MINE_PROTO_WAITING      4
+#define MINE_PROTO_AUTH_SUCCESS 0
+#define MINE_PROTO_AUTH_FAIL    0
 
 char MINE_SSL_LOADED = 0;
 

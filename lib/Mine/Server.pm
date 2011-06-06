@@ -306,7 +306,7 @@ Event will be resent to all subscribers except sender.
 				_do_actions($handle, $handle->{_mine}{event});
 			}
 		}
-		
+
 =head2 Event data receiving
 
 After event client could send data:

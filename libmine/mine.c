@@ -178,7 +178,7 @@ char mine_login(mine *self, char *login, char *password) {
 		return 0;
 	}
 	
-	if (login_status == MINE_LOGIN_FAIL) {
+	if (login_status == MINE_PROTO_AUTH_FAIL) {
 		self->err = 0;
 		self->errstr = "Login failed";
 		return 0;
@@ -230,10 +230,11 @@ char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
 		}
 	}
 	
+	if (datalen == 0) return 1;
 	if (self->snd_datalen == 0) {
 		self->snd_datalen = datalen;
 		char buf[9];
-		sprintf(buf, "%c", MINE_PROTO_DATA);
+		sprintf(buf, "%c", MINE_PROTO_DATA_SND);
 		memcpy(buf+1, &datalen, 8);
 		if (_mine_write(self, buf, 9) <= 0) {
 			_mine_set_error(self);
