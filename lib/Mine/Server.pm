@@ -238,6 +238,36 @@ server must admit such client.
 			}
 		}
 
+=head2 Event registration
+
+Client could register the event it wants to receive
+from the server:
+
+  +-----------------+------+-------+-----+
+  |         1       |  1   | 1-255 |  4  |
+  +-----------------+------+-------+-----+
+  | PROTO_EVENT_REG | elen | event |  ip |
+  +-----------------+------+-------+-----+
+
+Ip could be "0.0.0.0" that means "any ip". Server will
+resent event and data to clients in the same format it
+receivs from clients.
+
+=cut
+		when (PROTO_EVENT_REG) {
+			my $elen = unpack('C', $handle->{rbuf});
+			
+			if (length($handle->{rbuf}) > $elen+4) {
+				my (undef, undef, $event, $ip) = 
+					unpack('C2a'.$elen.'a4', _strshift($handle->{rbuf}, $elen+5));
+					
+				my $key = $ip.$event;
+				$self->{waiting}{$key}{_$handle} = $handle;
+				$self->{handles}{_$handle} = $key;
+				$handle->{_mine}{state} = PROTO_WAITING;
+			}
+		}
+
 =head2 Event receiving
 
 Event from the client format should be:
@@ -279,6 +309,30 @@ Event will be resent to all subscribers except sender.
 		
 =head2 Event data receiving
 
+After event client could send data:
+
+  +----------------+------+--------------------------+
+  |        1       |   8  |   0-18446744073709551615 |
+  +----------------+------+--------------------------+
+  | PROTO_DATA_SND | dlen |           data           |
+  +----------------+------+--------------------------+
+
+All actions associated with event will be invoked all time
+wile new chunk of data will be available.
+Special arguments state:
+
+=over
+
+=item $EVENT = undef
+
+=item $DATALEN = dlen (if first call) or undef
+
+=item $DATA = data or undef (if no data available, but only dlen)
+
+=back
+
+Event data will be resent to all subscribers except sender.
+
 =cut
 		when (PROTO_DATA_RCV) {
 			my @specvars = (undef);
@@ -303,19 +357,6 @@ Event will be resent to all subscribers except sender.
 			
 			_resend_data($handle, @specvars[1,2]);
 			_do_actions($handle, @specvars);
-		}
-		when (PROTO_EVENT_REG) {
-			my $elen = unpack('C', $handle->{rbuf});
-			
-			if (length($handle->{rbuf}) > $elen+4) {
-				my (undef, undef, $event, $ip) = 
-					unpack('C2a'.$elen.'a4', _strshift($handle->{rbuf}, $elen+5));
-					
-				my $key = $ip.$event;
-				$self->{waiting}{$key}{_$handle} = $handle;
-				$self->{handles}{_$handle} = $key;
-				$handle->{_mine}{state} = PROTO_WAITING;
-			}
 		}
 	}
 }
