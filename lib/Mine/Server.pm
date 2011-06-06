@@ -273,6 +273,7 @@ Event will be resent to all subscribers except sender.
 				$handle->{_mine}{state} = PROTO_WAITING;
 				
 				_resend_event($handle);
+				_do_actions($handle, $handle->{_mine}{event});
 			}
 		}
 		
@@ -280,88 +281,28 @@ Event will be resent to all subscribers except sender.
 
 =cut
 		when (PROTO_DATA_RCV) {
-			
-			my @specvars;
-			unless ($handle->{_mine}{event}) {
-				
+			my @specvars = (undef);
+			if (!$handle->{_mine}{datalen}) {
+				$handle->{_mine}{datalen} = unpack('Q', _strshift($handle->{rbuf}, 8));
+				push @specvars, $handle->{_mine}{datalen};
 			}
 			else {
 				push @specvars, undef;
-			}
-			
-			if ($handle->{rbuf} > 0) {
-				if (!$handle->{_mine}{datalen}) {
-					if (length($handle->{rbuf}) >= 8) {
-						$handle->{_mine}{datalen} = unpack('Q', _strshift($handle->{rbuf}, 8));
-						push @specvars, $handle->{_mine}{datalen};
-					}
-					else {
-						$handle->{_mine}{state} = PROTO_WAITING;
-						return;
-					}
-				}
-				else {
-					push @specvars, undef;
-				}
 			}
 			
 			if ((my $buflen = length($handle->{rbuf})) > 0) {
 				my $bytes = $buflen > $handle->{_mine}{datalen} ? $handle->{_mine}{datalen} : $buflen;
 				push @specvars, _strshift($handle->{rbuf}, $bytes);
-				$handle->{_mine}{datalen} -= $bytes;
+				unless ($handle->{_mine}{datalen} -= $bytes) {
+					$handle->{_mine}{state} = PROTO_WAITING; # all data received
+				}
 			}
 			else {
 				push @specvars, undef;
 			}
 			
-			if (grep defined, @specvars) {
-				my @actions_array;
-				if (my $act_sender = $self->{cfg}{actions}{optimized}{senders}{$handle->{_mine}{host}}) {
-					push @actions_array, [@$act_sender];
-				}
-				if (my $act_user = $self->{cfg}{actions}{optimized}{users}{$handle->{_mine}{user}}) {
-					push @actions_array, [@$act_user];
-				}
-				if (my $act_event = $self->{cfg}{actions}{optimized}{events}{$handle->{_mine}{event}}) {
-					push @actions_array, [@$act_event];
-				}
-				my $netmask = $self->{cfg}{actions}{optimized}{netmask};
-				
-				my @acting;
-				my ($i, $j) = (0, 0);
-				foreach my $actions (@actions_array) {
-					foreach my $action (@$actions) {
-						my $cond = $action->{condcnt} - 1;
-						for ($j=$i; $cond>0, $j<@actions_array; $j++) {
-							if ((my $index = _arrayindex($actions_array[$j], $action)) != -1) {
-								$cond--;
-								splice @{$actions_array[$j]}, $index, 1; # delete used action
-							}
-						}
-						
-						if ($cond > 0) {
-							for ($j=0; $j<@$netmask; $j+=3) {
-								if ($action == $netmask->[$j+2] &&
-									ip_belongs_net($handle->{_mine}{host}, $netmask->[$j], $netmask->[$j+1])) {
-									$cond--;
-									last;
-								}
-							}
-						}
-						
-						if ($cond <= 0) {
-							push @acting, $action->{action};
-						}
-					}
-					
-					$i++;
-				}
-				
-				push @acting, @{$self->{cfg}{actions}{optimized}{actions}};
-				foreach my $act (@acting) {
-					$self->{plugins}->act($handle->{_mine}{stash}, $act, );
-				}
-			}
+			_resend_data($handle, @specvars[1,2]);
+			_do_actions($handle, @specvars);
 		}
 		when (PROTO_EVENT_REG) {
 			my $elen = unpack('C', $handle->{rbuf});
@@ -426,9 +367,84 @@ sub _resend_event($) {
 	) {
 		if (exists $self->{waiting}{$key}) {
 			while (my (undef, $w_handle) = each %{$self->{waiting}{$key}}) {
-				$w_handle->push_write(pack('Ca*', PROTO_EVENT_SND, $handle->{_mine}{event}));
+				if ($w_handle != $handle) {
+					$w_handle->push_write(pack('Ca*', PROTO_EVENT_SND, $handle->{_mine}{event}));
+				}
 			}
 		}
+	}
+}
+
+sub _resend_data($$$) {
+	my $handle = shift;
+	
+	foreach my $key (
+		pack('Na*', $handle->{_mine}{host}, $handle->{_mine}{event}), # ip + event
+		"\0\0\0\0" . $handle->{_mine}{event}                          # any_ip + event
+	) {
+		if (exists $self->{waiting}{$key}) {
+			while (my (undef, $w_handle) = each %{$self->{waiting}{$key}}) {
+				if ($w_handle != $handle) {
+					if ($_[0]) { # datalen
+						$w_handle->push_write(pack('CQ'), PROTO_DATA_SND, $_[0]);
+					}
+					
+					if ($_[1]) { # data
+						$w_handle->push_write($_[1]);
+					}
+				}
+			}
+		}
+	}
+}
+
+sub _do_actions($@) {
+	my $handle = shift;
+	
+	my @actions_array;
+	if (my $act_sender = $self->{cfg}{actions}{optimized}{senders}{$handle->{_mine}{host}}) {
+		push @actions_array, [@$act_sender];
+	}
+	if (my $act_user = $self->{cfg}{actions}{optimized}{users}{$handle->{_mine}{user}}) {
+		push @actions_array, [@$act_user];
+	}
+	if (my $act_event = $self->{cfg}{actions}{optimized}{events}{$handle->{_mine}{event}}) {
+		push @actions_array, [@$act_event];
+	}
+	my $netmask = $self->{cfg}{actions}{optimized}{netmask};
+	
+	my @acting;
+	my ($i, $j) = (0, 0);
+	foreach my $actions (@actions_array) {
+		foreach my $action (@$actions) {
+			my $cond = $action->{condcnt} - 1;
+			for ($j=$i; $cond>0, $j<@actions_array; $j++) {
+				if ((my $index = _arrayindex($actions_array[$j], $action)) != -1) {
+					$cond--;
+					splice @{$actions_array[$j]}, $index, 1; # delete used action
+				}
+			}
+			
+			if ($cond > 0) {
+				for ($j=0; $j<@$netmask; $j+=3) {
+					if ($action == $netmask->[$j+2] &&
+						ip_belongs_net($handle->{_mine}{host}, $netmask->[$j], $netmask->[$j+1])) {
+						$cond--;
+						last;
+					}
+				}
+			}
+			
+			if ($cond <= 0) {
+				push @acting, $action->{action};
+			}
+		}
+		
+		$i++;
+	}
+	
+	foreach my $act (@acting, @{$self->{cfg}{actions}{optimized}{actions}}) {
+		$self->{plugins}->act($handle->{_mine}{stash}, $act, @_);
 	}
 }
 
