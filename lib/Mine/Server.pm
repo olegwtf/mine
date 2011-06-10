@@ -272,27 +272,11 @@ receivs from clients.
 
 Event from the client format should be:
 
-  +------+--------+
-  |   1  |  1-255 |
-  +------+--------+
-  | elen |  event |
-  +------+--------+
-
-After that actions associated with this event in the config will be
-invoked througn L<Mine::PluginManager|Mine::PluginManager> class.
-Special arguments state:
-
-=over
-
-=item $EVENT = event
-
-=item $DATALEN = undef
-
-=item $DATA = undef
-
-=back
-
-Event will be resent to all subscribers except sender.
+  +-----------------+------+--------+
+  |      1          |   1  |  1-255 |
+  +-----------------+------+--------+
+  | PROTO_EVENT_SND | elen |  event |
+  +-----------------+------+--------+
 
 =cut
 		when (PROTO_EVENT_RCV) {
@@ -301,15 +285,12 @@ Event will be resent to all subscribers except sender.
 				_strshift($handle->{rbuf});
 				$handle->{_mine}{event} = _strshift($handle->{rbuf}, $elen);
 				$handle->{_mine}{state} = PROTO_WAITING;
-				
-				_resend_event($handle);
-				_do_actions($handle, $handle->{_mine}{event});
 			}
 		}
 
 =head2 Event data receiving
 
-After event client could send data:
+After event client should send data:
 
   +----------------+------+--------------------------+
   |        1       |   8  |   0-18446744073709551615 |
@@ -317,17 +298,20 @@ After event client could send data:
   | PROTO_DATA_SND | dlen |           data           |
   +----------------+------+--------------------------+
 
+Then client could send data in the format above without
+sending event. This data will be associated with last event.
+
 All actions associated with event will be invoked all time
 wile new chunk of data will be available.
 Special arguments state:
 
 =over
 
-=item $EVENT = undef
+=item $EVENT = current event (if it is first chunk of data) or undef
 
-=item $DATALEN = dlen (if first call) or undef
+=item $DATALEN = dlen (if it is first chunk of data) or undef
 
-=item $DATA = data or undef (if no data available, but only dlen)
+=item $DATA = data or undef (if no data available)
 
 =back
 
@@ -335,16 +319,20 @@ Event data will be resent to all subscribers except sender.
 
 =cut
 		when (PROTO_DATA_RCV) {
-			my @specvars = (undef);
+			my @specvars;
+
 			if (!$handle->{_mine}{datalen}) {
 				$handle->{_mine}{datalen} = unpack('Q', _strshift($handle->{rbuf}, 8));
-				push @specvars, $handle->{_mine}{datalen};
+				push @specvars, $handle->{_mine}{event}, $handle->{_mine}{datalen};
 			}
 			else {
-				push @specvars, undef;
+				push @specvars, undef, undef;
 			}
 			
-			if ((my $buflen = length($handle->{rbuf})) > 0) {
+			if ($handle->{_mine}{datalen} == 0) {
+				push @specvars, '';
+			}
+			elsif ((my $buflen = length($handle->{rbuf})) > 0) {
 				my $bytes = $buflen > $handle->{_mine}{datalen} ? $handle->{_mine}{datalen} : $buflen;
 				push @specvars, _strshift($handle->{rbuf}, $bytes);
 				unless ($handle->{_mine}{datalen} -= $bytes) {
@@ -355,7 +343,7 @@ Event data will be resent to all subscribers except sender.
 				push @specvars, undef;
 			}
 			
-			_resend_data($handle, @specvars[1,2]);
+			_resend_event($handle, @specvars);
 			_do_actions($handle, @specvars);
 		}
 	}
@@ -399,7 +387,7 @@ sub _can_auth($$$) {
 	return 0;
 }
 
-sub _resend_event($) {
+sub _resend_event($@) {
 	my $handle = shift;
 	
 	foreach my $key (
@@ -409,29 +397,16 @@ sub _resend_event($) {
 		if (exists $self->{waiting}{$key}) {
 			while (my (undef, $w_handle) = each %{$self->{waiting}{$key}}) {
 				if ($w_handle != $handle) {
-					$w_handle->push_write(pack('Ca*', PROTO_EVENT_SND, $handle->{_mine}{event}));
-				}
-			}
-		}
-	}
-}
-
-sub _resend_data($$$) {
-	my $handle = shift;
-	
-	foreach my $key (
-		pack('Na*', $handle->{_mine}{host}, $handle->{_mine}{event}), # ip + event
-		"\0\0\0\0" . $handle->{_mine}{event}                          # any_ip + event
-	) {
-		if (exists $self->{waiting}{$key}) {
-			while (my (undef, $w_handle) = each %{$self->{waiting}{$key}}) {
-				if ($w_handle != $handle) {
-					if ($_[0]) { # datalen
-						$w_handle->push_write(pack('CQ'), PROTO_DATA_SND, $_[0]);
+					if (defined $_[0]) { # event
+						$w_handle->push_write(pack('CCa*', PROTO_EVENT_SND, length($_[0]), $_[0]));
 					}
 					
-					if ($_[1]) { # data
-						$w_handle->push_write($_[1]);
+					if (defined $_[1]) { # datalen
+						$w_handle->push_write(pack('CQ', PROTO_DATA_SND, $_[1]));
+					}
+					
+					if (defined $_[2]) { # data
+						$w_handle->push_write($_[2]);
 					}
 				}
 			}
