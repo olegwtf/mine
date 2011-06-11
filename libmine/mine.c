@@ -230,7 +230,6 @@ char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
 		}
 	}
 	
-	if (datalen == 0) return 1;
 	if (self->snd_datalen == 0) {
 		self->snd_datalen = datalen;
 		char buf[9];
@@ -253,5 +252,67 @@ char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
 }
 
 uint64_t mine_event_recv(mine *self, char *event, char *buf) {
+	bzero(buf, 1024);
 	
+	if (self->rcv_datalen == 0) {
+		char proto_op;
+		if (_mine_read(self, &proto_op, 1) <= 0) {
+			_mine_set_error(self);
+			return -1;
+		}
+		
+		if (proto_op == MINE_PROTO_EVENT_RCV) {
+			char ev_len;
+			if (_mine_read(self, &ev_len, 1) <= 0) {
+				_mine_set_error(self);
+				return -1;
+			}
+			
+			event = malloc(ev_len+1);
+			if (!event) {
+				_mine_sys_error(self);
+				return -1;
+			}
+			
+			bzero(event, ev_len+1);
+			if (_mine_read(self, event, ev_len) < ev_len) {
+				_mine_set_error(self);
+				return -1;
+			}
+			
+			if (self->rcv_event) {
+				free(self->rcv_event);
+			}
+			self->rcv_event = event;
+			
+			if (_mine_read(self, &proto_op, 1) <= 0) {
+				_mine_set_error(self);
+				return -1;
+			}
+		}
+		
+		if (proto_op == MINE_PROTO_DATA_RCV) {
+			if (_mine_read(self, &(self->rcv_datalen), 8) <= 0) {
+				_mine_set_error(self);
+				return -1;
+			}
+		}
+		else {
+			self->err = 0;
+			self->errstr = "Unexpected protocol operation received";
+			return -1;
+		}
+	}
+	
+	if (self->rcv_datalen) {
+		int readed = _mine_read(self, buf, self->rcv_datalen > 1023 ? 1023 : self->rcv_datalen);
+		if (readed <= 0) {
+			_mine_set_error(self);
+			return -1;
+		}
+		
+		self->rcv_datalen -= readed;
+	}
+	
+	return self->rcv_datalen;
 }
