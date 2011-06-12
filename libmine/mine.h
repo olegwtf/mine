@@ -26,6 +26,8 @@
 #define MINE_PROTO_AUTH_SUCCESS 0
 #define MINE_PROTO_AUTH_FAIL    0
 
+#define MINE_CHUNK_SIZE      1024
+
 char MINE_SSL_LOADED = 0;
 
 typedef struct mine {
@@ -38,6 +40,7 @@ typedef struct mine {
 	char *rcv_event;
 	uint64_t snd_datalen;
 	uint64_t rcv_datalen;
+	char readed;
 } mine;
 
 mine *mine_new();
@@ -47,6 +50,6 @@ char mine_disconnect(mine *self);
 char mine_login(mine *self, char *login, char *password);
 char mine_event_reg(mine *self, char *event, char *ip);
 char mine_event_send(mine *self, char *event, uint64_t datalen, char *data);
-uint64_t mine_event_recv(mine *self, char *event, char *buf);
+int64_t mine_event_recv(mine *self, char **event, char *buf);
 
 #endif // MINE_H

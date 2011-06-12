@@ -6,17 +6,24 @@ int main() {
 	
 	if (mine_connect(m, "localhost", 1135)) {
 		printf("Successfully connected. %s protocol\n", m->ssl ? "SSL" : "Plain");
-		if (mine_login(m, "root", "toor")) {
+		if (mine_login(m, "oleg", "qwer")) {
 			printf("Successfully logged in\n");
 			
-			if (mine_event_reg(m, "EV_COME", "0.0.0.0")) {
+			if (mine_event_reg(m, "EV_SUX", "0.0.0.0")) {
 				printf("Event successfully registered\n");
 				
-				if (mine_event_send(m, "EV_SUX", 10, "abcdefghij")) {
-					printf("Event successfully sent\n");
-				}
-				else {
-					printf("Error while sending event: %s\n", m->errstr);
+				char *event;
+				char data[MINE_CHUNK_SIZE];
+				int64_t rv;
+				while (1) {
+					while ((rv = mine_event_recv(m, &event, data)) >= 0) {
+						printf("%ld, %s, %s\n", rv, event, data);
+					}
+					
+					if (rv == -1) {
+						if(m->errstr != NULL) printf("%s\n", m->errstr);
+						break;
+					}
 				}
 			}
 			else {

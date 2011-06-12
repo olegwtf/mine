@@ -10,6 +10,6 @@ lib:
 
 test:
 	$(cc) -o mtest test.c mine.so -lssl
-
+	$(cc) -o mtest1 test1.c mine.so -lssl
 clean:
-	rm *.o *.so mtest
+	rm *.o *.so mtest*

@@ -150,7 +150,7 @@ sub _cb_accept {
 		fh => $sock,
 		@conn_opts,
 		on_read  => \&_cb_read,
-		on_eof   => \&_cb_eof,
+		on_eof   => \&_cb_error,
 		on_error => \&_cb_error
 	);
 	$handle->{_mine}{state} = PROTO_AUTH;
@@ -258,9 +258,10 @@ receivs from clients.
 			my $elen = unpack('C', $handle->{rbuf});
 			
 			if (length($handle->{rbuf}) > $elen+4) {
-				my (undef, undef, $event, $ip) = 
-					unpack('C2a'.$elen.'a4', _strshift($handle->{rbuf}, $elen+5));
+				my (undef, $event, $ip) = 
+					unpack('Ca'.$elen.'a4', _strshift($handle->{rbuf}, $elen+5));
 					
+				DEBUG && warn "PROTO_EVENT_REG: $event, " . join('.', unpack('C4', $ip));
 				my $key = $ip.$event;
 				$self->{waiting}{$key}{_$handle} = $handle;
 				$self->{handles}{_$handle} = $key;
@@ -343,18 +344,29 @@ Event data will be resent to all subscribers except sender.
 				push @specvars, undef;
 			}
 			
+			DEBUG && warn "PROTO_DATA_RCV: ", join('|', @specvars);
 			_resend_event($handle, @specvars);
 			_do_actions($handle, @specvars);
 		}
 	}
 }
 
-sub _cb_eof {
-	my ($handle) = @_;
-}
-
 sub _cb_error {
 	my ($handle, $fatal, $message) = @_;
+	DEBUG && warn "_cb_error($handle, $fatal, $message)";
+	
+	if ($self->{handles}{_$handle} != $handle) {
+		my $key = $self->{handles}{_$handle};
+		delete $self->{waiting}{$key}{_$handle};
+		
+		unless (%{$self->{waiting}{$key}}) {
+			delete $self->{waiting}{$key};
+		}
+	}
+	
+	delete $self->{handles}{_$handle};
+	$handle->destroy();
+	undef $handle;
 }
 
 #### other routines ####
