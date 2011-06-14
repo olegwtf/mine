@@ -1,2 +1,68 @@
 #!/usr/bin/env perl
 
+use Mine::Lib;
+use Mine::Constants;
+use Getopt::Std;
+use autodie;
+use strict;
+
+if ($ARGV[0] eq '--help') {
+	print "Available options:\n",
+	      "\t--help\n",
+	      "\t-u user\n",
+	      "\t-p pass\n",
+	      "\t-h host\n",
+	      "\t-d data\n",
+	      "\t-f file\n",
+	      "\t-e event\n",
+	      "\t-s send\n",
+	      "\t-r [from] read\n";
+	exit;
+}
+
+my %opts;
+getopt('uphdfesr', \%opts);
+my $mine = Mine::Lib->new(autodie => 1);
+
+my ($host, $port) = ('127.0.0.1', DEFAULT_PORT);
+if ($opts{h}) {
+	if ($opts{h} =~ /([^:]+):(\d+)/) {
+		($host, $port) = ($1, $2);
+	}
+	else {
+		$host = $opts{h};
+	}
+}
+$mine->connect($host, $port);
+$mine->login($opts{u}, $opts{p});
+
+if (exists $opts{r}) {
+	die '-e should be specified' unless $opts{e};
+	
+	my $from = '0.0.0.0';
+	if ($opts{r}) {
+		$from = $opts{r};
+	}
+	$mine->event_reg($opts{e}, $from);
+	
+	my ($event, $datalen, $buf);
+	while ($mine->event_recv(\$event, \$datalen, \$buf) >= 0) {
+		syswrite(STDOUT, $buf);
+	}
+}
+elsif (exists $opts{s}) {
+	die '-e should be specified' unless $opts{e};
+	
+	if (exists $opts{d}) {
+		$mine->event_send($opts{e}, length($opts{d}), $opts{d});
+	}
+	elsif (exists $opts{f}) {
+		open FH, $opts{f};
+		my $buf;
+		my $len = -s $opts{f};
+		while (sysread(FH, $buf, 1024)) {
+			$mine->event_send($opts{e}, $len, $buf);
+		}
+		close FH;
+	}
+}
