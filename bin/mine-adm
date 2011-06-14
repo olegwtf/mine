@@ -1,2 +1,222 @@
 #!/usr/bin/env perl
 
+use Getopt::Long;
+use Mine::Constants;
+use Data::Dumper;
+use JSON::XS;
+use Digest::MD5 qw(md5_hex);
+use v5.10;
+use strict;
+
+sub firstidx($\@) {
+	my ($val, $array) = @_;
+	
+	my $i = 0;
+	foreach my $a (@$array) {
+		return $i if $val eq $a;
+		$i++;
+	}
+	
+	return -1
+}
+
+my $config = shift;
+my @configs = ('main', 'users', 'actions', 'hosts');
+if (!($config ~~ @configs)) {
+	die "`$config' is invalid config name. Should be one of: ", join(', ', @configs);
+}
+
+my $class = "Mine::Config::" . ucfirst($config);
+eval "require $class"
+	or die $@;
+
+my $cfg;
+eval {
+	$cfg = $class->new(CONFIG_PATH . "/$config.cfg");
+};
+if ($@) {
+	$cfg = $class->new_from_default(CONFIG_PATH . "/$config.cfg");
+}
+
+my %opts;
+given ($config) {
+	when ('main') {
+		GetOptions(
+			'help' => \$opts{help},
+			'show' => \$opts{show},
+			'bind-address:s' => \$opts{bind_address},
+			'bind-port:s' => \$opts{bind_port},
+			'ssl:s' => \$opts{ssl},
+			'ipauth:s' => \$opts{ipauth},
+		);
+		
+		if (defined $opts{help}) {
+			print "Available options:\n",
+			      "\t--help\n",
+			      "\t--show\n",
+			      "\t--bind-address [val]\n",
+			      "\t--bind-port [val]\n",
+			      "\t--ssl [val]\n".
+			      "\t--ipauth [val]\n";
+			exit;
+		}
+		
+		if (defined $opts{show}) {
+			print Dumper($cfg->{data});
+			exit;
+		}
+		
+		if (defined $opts{bind_address}) {
+			if ($opts{bind_address}) {
+				$cfg->{data}{bind_address} = $opts{bind_address};
+			}
+			else {
+				print "bind_address: $cfg->{data}{bind_address}\n";
+			}
+		}
+		
+		if (defined $opts{bind_port}) {
+			if ($opts{bind_port}) {
+				$cfg->{data}{bind_port} = $opts{bind_port};
+			}
+			else {
+				print "bind_port: $cfg->{data}{bind_port}\n";
+			}
+		}
+		
+		if (defined $opts{ssl}) {
+			if ($opts{ssl}) {
+				$cfg->{data}{ssl} = $opts{ssl} eq "true"  ? JSON::XS::true  :
+				                    $opts{ssl} eq "false" ? JSON::XS::false :
+				                    die "ssl option should be true or false";
+			}
+			else {
+				print "ssl: $cfg->{data}{ssl}\n";
+			}
+		}
+		
+		if (defined $opts{ipauth}) {
+			if ($opts{ipauth}) {
+				$cfg->{data}{ipauth} = $opts{ipauth} eq "true"  ? JSON::XS::true  :
+				                       $opts{ipauth} eq "false" ? JSON::XS::false :
+				                       die "ipauth option should be true or false";
+			}
+			else {
+				print "ipauth: $cfg->{data}{ipauth}\n";
+			}
+		}
+	}
+	when ('hosts') {
+		GetOptions(
+			'help' => \$opts{help},
+			'show' => \$opts{show},
+			'add=s' => \$opts{add},
+			'del=s' => \$opts{del},
+		);
+		
+		if (defined $opts{help}) {
+			print "Available options:\n",
+			      "\t--help\n",
+			      "\t--show\n",
+			      "\t--add val",
+			      "\t--del val";
+			exit;
+		}
+		
+		if (defined $opts{show}) {
+			print Dumper($cfg->{data});
+			exit;
+		}
+		
+		if (defined $opts{add}) {
+			my $found = firstidx $opts{add}, @{$cfg->{data}};
+			if ($found == -1) {
+				push @{$cfg->{data}}, $opts{add};
+			}
+		}
+		
+		if (defined $opts{del}) {
+			my $found = firstidx $opts{del}, @{$cfg->{data}};
+			unless ($found == -1) {
+				splice @{$cfg->{data}}, $found, 1;
+			}
+		}
+	}
+	when ('users') {
+		GetOptions(
+			'help' => \$opts{help},
+			'show' => \$opts{show},
+			'add=s' => \$opts{add},
+			'del=s' => \$opts{del},
+			'mod=s' => \$opts{mod},
+			'pass=s' => \$opts{pass},
+		);
+		
+		if (defined $opts{help}) {
+			print "Available options:\n",
+			      "\t--help\n",
+			      "\t--show\n",
+			      "\t--add val --pass val\n",
+			      "\t--mod val --pass val\n",
+			      "\t--del val\n";
+			exit;
+		}
+		
+		if (defined $opts{show}) {
+			print Dumper($cfg->{data});
+			exit;
+		}
+		
+		if (defined $opts{add} || defined $opts{mod}) {
+			die "--pass required for --add or --mod" unless (defined $opts{pass});
+			$cfg->{data}{$opts{add}||$opts{mod}} = md5_hex($opts{pass});
+		}
+		
+		if (defined $opts{del}) {
+			delete $cfg->{data}{$opts{del}};
+		}
+	}
+	when ('actions') {
+		GetOptions(
+			'help' => \$opts{help},
+			'show' => \$opts{show},
+			'add' => \$opts{add},
+			'sender=s' => \@{$opts{sender}},
+			'user=s' => \@{$opts{user}},
+			'event=s' => \@{$opts{event}},
+			'action=s' => \$opts{action},
+			'args=s' => \@{$opts{args}}
+		);
+		
+		if (defined $opts{help}) {
+			print "Available options:\n",
+				"\t--help\n",
+				"\t--show\n",
+				"\t--add [--sender val] [--user val] [--event val] --action val [--args val]\n";
+				
+			exit;
+		}
+		
+		if (defined $opts{show}) {
+			print Dumper($cfg->{data});
+		}
+		
+		if (defined $opts{add}) {
+			die '--action required for --add' unless defined $opts{action};
+			my $ael = {};
+			if (@{$opts{sender}}) {
+				$ael->{sender} = $opts{sender};
+			}
+			if (@{$opts{user}}) {
+				$ael->{user} = $opts{user};
+			}
+			if (@{$opts{event}}) {
+				$ael->{event} = $opts{event};
+			}
+			$ael->{action} = [ { $opts{action} => @{$opts{args}} ? $opts{args} : undef } ];
+			push @{$cfg->{data}}, $ael;
+		}
+	}
+}
+
+$cfg->save();

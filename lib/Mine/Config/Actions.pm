@@ -50,7 +50,7 @@ Valid config form is:
 
 	(root)   (action and conditions)
 	array -> hash -> {
-		host  => [h1, ..., hn], # optional, hn may be in form of net/cidr
+		sender  => [s1, ..., sn], # optional, sn may be in form of net/cidr
 		user  => [u1, ..., un], # optional
 		event => [e1, ..., en], #optional
 		action => [ # array of actions
