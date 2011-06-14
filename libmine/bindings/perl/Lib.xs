@@ -137,7 +137,7 @@ event_recv(MINE_LIB *self, SV *event, SV *datalen, SV *buf)
 		if (RETVAL >= 0) {
 			sv_setpv_mg(SvRV(event), ev);
 			sv_setiv_mg(SvRV(datalen), dlen);
-			sv_setpv_mg(SvRV(buf), bf);
+			sv_setpvn_mg(SvRV(buf), bf, RETVAL);
 		}
 		
 		if (RETVAL == -1 && self->autodie) {

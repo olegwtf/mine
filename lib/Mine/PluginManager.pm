@@ -20,9 +20,10 @@ sub load {
 		return 1;
 	}
 	
-	local @INC;
-	push  @INC, @{$self->{extrainc}}
-		if @{$self->{extrainc}};
+	#local @INC;
+	if (@{$self->{extrainc}}) {
+		push  @INC, @{$self->{extrainc}};
+	}
 	
 	eval "require Mine::Plugin::$plugin"
 		or die $@;
@@ -51,6 +52,7 @@ sub act {
 		$self->load( substr($sub, 0, rindex($sub, '::')) );
 		$sub = "Mine::Plugin::$sub";
 		if ('EV_SAFE' ~~ [attributes::get(\&{$sub})]) {
+			no strict 'refs';
 			$sub->(
 				$stash,
 				ref($arg) eq 'ARRAY' ?

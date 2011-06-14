@@ -7,5 +7,6 @@ use Mine::Constants;
 Mine::Server->new(
 	main    => CONFIG_PATH . '/main.cfg',
 	actions => CONFIG_PATH . '/actions.cfg',
-	users   => CONFIG_PATH . '/users.cfg'
+	users   => CONFIG_PATH . '/users.cfg',
+	hosts   => CONFIG_PATH . '/hosts.cfg',
 )->start();

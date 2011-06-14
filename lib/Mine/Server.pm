@@ -155,6 +155,7 @@ sub _cb_accept {
 	);
 	$handle->{_mine}{state} = PROTO_AUTH;
 	$handle->{_mine}{host} = host2long($host);
+	$handle->{_mine}{stash} = {};
 	$self->{handles}{_$handle} = $handle; # see sub _($)
 }
 
@@ -174,11 +175,11 @@ sub _cb_read {
 Right after connection client should send username and password.
 Username and passsword could be empty:
 
-  +------------+------+-------+------+-------+
-  |     1      |   1  | 0-255 |   1  | 0-255 |
-  -------------+------+-------+------+-------+
-  | PROTO_AUTH | ulen | user  | plen | pass  |
-  +------------+------+-------+------+-------+
+  +------+-------+------+-------+
+  |   1  | 0-255 |   1  | 0-255 |
+  +------+-------+------+-------+
+  | ulen | user  | plen | pass  |
+  +------+-------+------+-------+
 
 Server response contains information about login success or fail.
 If login failed server immediately close connection:
@@ -200,6 +201,7 @@ server must admit such client.
 				
 				if ($ulen == 0) {
 					# anonymous
+					_strshift($handle->{rbuf});
 					$handle->{_mine}{user} = '';
 				}
 				elsif (length($handle->{rbuf}) > $ulen) {
@@ -214,6 +216,7 @@ server must admit such client.
 				
 				if ($plen == 0) {
 					# anonymous
+					_strshift($handle->{rbuf});
 					$handle->{_mine}{password} = '';
 				}
 				elsif (length($handle->{rbuf}) > $plen) {
@@ -384,12 +387,16 @@ sub _can_auth($$$) {
 		return 0;
 	}
 	
-	if (exists $self->{cfg}{main}{optimized}{ip}{$host}) {
+	unless (exists $self->{cfg}{hosts}{optimized}) {
+		return 0;
+	}
+	
+	if (exists $self->{cfg}{hosts}{optimized}{ip}{$host}) {
 		# auth by ip ok
 		return 1;
 	}
 	
-	my $netmask = $self->{cfg}{main}{optimized}{netmask};
+	my $netmask = $self->{cfg}{hosts}{optimized}{netmask};
 	for (my $i=0, my $l=@$netmask; $i<$l; $i+=2) {
 		if (ip_belongs_net($host, $netmask->[$i], $netmask->[$i+1])) {
 			return 1;
@@ -447,7 +454,7 @@ sub _do_actions($@) {
 		foreach my $action (@$actions) {
 			my $cond = $action->{condcnt} - 1;
 			for ($j=$i; $cond>0, $j<@actions_array; $j++) {
-				if ((my $index = _arrayindex($actions_array[$j], $action)) != -1) {
+				if ((my $index = _arrindex($actions_array[$j], $action)) != -1) {
 					$cond--;
 					splice @{$actions_array[$j]}, $index, 1; # delete used action
 				}
@@ -472,7 +479,9 @@ sub _do_actions($@) {
 	}
 	
 	foreach my $act (@acting, @{$self->{cfg}{actions}{optimized}{actions}}) {
-		$self->{plugins}->act($handle->{_mine}{stash}, $act, @_);
+		foreach my $act_elt (@$act) {
+			$self->{plugins}->act($handle->{_mine}{stash}, $act_elt, @_);
+		}
 	}
 }
 
