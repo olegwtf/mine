@@ -1,0 +1,8 @@
+Changes
+Lib.xs
+Makefile.PL
+MANIFEST
+ppport.h
+README
+t/Mine-Lib.t
+lib/Mine/Lib.pm

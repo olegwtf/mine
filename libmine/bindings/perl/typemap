@@ -1,0 +1,5 @@
+MINE_LIB*	T_MINE_LIB
+
+INPUT
+T_MINE_LIB
+	$var = P_TO_MINE_LIB($arg, \"$var\");

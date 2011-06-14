@@ -2,7 +2,7 @@
 #include "mine.h"
 
 int main() {
-	mine *m = mine_new();
+	MINE *m = mine_new();
 	
 	if (mine_connect(m, "localhost", 1135)) {
 		printf("Successfully connected. %s protocol\n", m->ssl ? "SSL" : "Plain");
@@ -12,7 +12,7 @@ int main() {
 			if (mine_event_reg(m, "EV_COME", "0.0.0.0")) {
 				printf("Event successfully registered\n");
 				
-				if (mine_event_send(m, "EV_SUX", 10, "abcdefghij")) {
+				if (mine_event_send(m, "EV_SUX", 10, 10, "abcdefghij")) {
 					printf("Event successfully sent\n");
 				}
 				else {

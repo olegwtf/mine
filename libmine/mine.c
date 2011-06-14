@@ -1,6 +1,6 @@
 #include "mine.h"
 
-void _mine_set_sys_error(mine *self) {
+void _mine_set_sys_error(MINE *self) {
 	self->err  = errno;
 	self->errstr = strerror(errno);
 	if (self->errstr == NULL) {
@@ -8,7 +8,7 @@ void _mine_set_sys_error(mine *self) {
 	}
 }
 
-void _mine_set_ssl_error(mine *self) {
+void _mine_set_ssl_error(MINE *self) {
 	self->err = 0;
 	self->errstr = ERR_lib_error_string( ERR_get_error() );
 	if (self->errstr == NULL) {
@@ -16,7 +16,7 @@ void _mine_set_ssl_error(mine *self) {
 	}
 }
 
-void _mine_set_error(mine *self) {
+void _mine_set_error(MINE *self) {
 	if (self->ssl) {
 		_mine_set_ssl_error(self);
 	}
@@ -25,7 +25,7 @@ void _mine_set_error(mine *self) {
 	}
 }
 
-int _mine_write(mine *self, const void *msg, size_t len) {
+int _mine_write(MINE *self, const void *msg, size_t len) {
 	if (self->ssl) {
 		return SSL_write(self->ssl, msg, len);
 	}
@@ -33,7 +33,7 @@ int _mine_write(mine *self, const void *msg, size_t len) {
 	return send(self->sock, msg, len, MSG_NOSIGNAL);
 }
 
-int _mine_read(mine *self, void *buf, size_t len) {
+int _mine_read(MINE *self, void *buf, size_t len) {
 	if (self->ssl) {
 		return SSL_read(self->ssl, buf, len);
 	}
@@ -41,27 +41,29 @@ int _mine_read(mine *self, void *buf, size_t len) {
 	return recv(self->sock, buf, len, 0);
 }
 
-mine *mine_new() {
-	mine *self = malloc(sizeof(mine));
+MINE *mine_new() {
+	MINE *self = malloc(sizeof(MINE));
 	
 	if (!self) {
 		return self;
 	}
 	
-	self->sock    = 0;
-	self->ssl     = NULL;
-	self->ctx     = NULL;
-	self->err     = 0;
-	self->errstr  = NULL;
+	self->sock        = 0;
+	self->ssl         = NULL;
+	self->ctx         = NULL;
+	self->err         = 0;
+	self->errstr      = NULL;
 	self->snd_event   = NULL;
+	self->rcv_event   = NULL;
 	self->snd_datalen = 0;
 	self->rcv_datalen = 0;
-	self->readed = 0;
+	self->cur_datalen = 0;
+	self->readed      = 0;
 	
 	return self;
 }
 
-void mine_destroy(mine *self) {
+void mine_destroy(MINE *self) {
 	if (self->sock) {
 		mine_disconnect(self);
 	}
@@ -69,7 +71,7 @@ void mine_destroy(mine *self) {
 	free(self);
 }
 
-char mine_connect(mine *self, char *host, uint16_t port) {
+char mine_connect(MINE *self, char *host, uint16_t port) {
 	if (self->sock) {
 		return 1;
 	}
@@ -152,7 +154,7 @@ char mine_connect(mine *self, char *host, uint16_t port) {
 		return 0;
 }
 
-char mine_disconnect(mine *self) {
+char mine_disconnect(MINE *self) {
 	if (self->ssl) {
 		SSL_CTX_free(self->ctx);
 		self->ssl = NULL;
@@ -167,7 +169,7 @@ char mine_disconnect(mine *self) {
 	return 1;
 }
 
-char mine_login(mine *self, char *login, char *password) {
+char mine_login(MINE *self, char *login, char *password) {
 	unsigned char login_len = login ? strlen(login) : 0;
 	unsigned char password_len = password ? strlen(password) : 0;
 	
@@ -194,7 +196,7 @@ char mine_login(mine *self, char *login, char *password) {
 	return 1;
 }
 
-char mine_event_reg(mine *self, char *event, char *ip) {
+char mine_event_reg(MINE *self, char *event, char *ip) {
 	unsigned char event_len = strlen(event);
 	
 	struct in_addr addr;
@@ -215,7 +217,7 @@ char mine_event_reg(mine *self, char *event, char *ip) {
 	return 1;
 }
 
-char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
+char mine_event_send(MINE *self, char *event, int64_t datalen, int chunklen, char *data) {
 	if (self->snd_event == NULL || strcmp(event, self->snd_event) != 0) {
 		if (self->snd_datalen != 0) {
 			self->err = 0;
@@ -248,7 +250,6 @@ char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
 		}
 	}
 	
-	uint64_t chunklen = strlen(data);
 	if (_mine_write(self, data, chunklen) <= 0) {
 		_mine_set_error(self);
 		return 0;
@@ -258,14 +259,15 @@ char mine_event_send(mine *self, char *event, uint64_t datalen, char *data) {
 	return 1;
 }
 
-int64_t mine_event_recv(mine *self, char **event, char *buf) {
-	bzero(buf, MINE_CHUNK_SIZE);
-	int64_t retval = self->rcv_datalen;
-	
+int mine_event_recv(MINE *self, char **event, int64_t *datalen, char *buf) {
 	if (self->rcv_datalen == 0 && self->readed) {
 		self->readed = 0;
+		self->cur_datalen = 0;
 		return -2;
 	}
+	
+	int readed = 0;
+	bzero(buf, MINE_CHUNK_SIZE);
 	
 	if (self->rcv_datalen == 0) {
 		char proto_op;
@@ -310,7 +312,7 @@ int64_t mine_event_recv(mine *self, char **event, char *buf) {
 				return -1;
 			}
 			
-			retval = self->rcv_datalen;
+			self->cur_datalen = self->rcv_datalen;
 		}
 		else {
 			self->err = 0;
@@ -320,7 +322,7 @@ int64_t mine_event_recv(mine *self, char **event, char *buf) {
 	}
 	
 	if (self->rcv_datalen) {
-		int readed = _mine_read(self, buf, self->rcv_datalen > MINE_CHUNK_SIZE-1 ? MINE_CHUNK_SIZE : self->rcv_datalen);
+		readed = _mine_read(self, buf, self->rcv_datalen > MINE_CHUNK_SIZE-1 ? MINE_CHUNK_SIZE-1 : self->rcv_datalen);
 		if (readed <= 0) {
 			_mine_set_error(self);
 			return -1;
@@ -333,6 +335,13 @@ int64_t mine_event_recv(mine *self, char **event, char *buf) {
 		self->readed = 1;
 	}
 	
+	if (!self->rcv_event) {
+		self->err = 0;
+		self->errstr = "Data received before event";
+		return -1;
+	}
+	
+	*datalen = self->cur_datalen;
 	*event = self->rcv_event;
-	return retval;
+	return readed;
 }

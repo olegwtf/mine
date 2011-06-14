@@ -2,7 +2,7 @@
 #include "mine.h"
 
 int main() {
-	mine *m = mine_new();
+	MINE *m = mine_new();
 	
 	if (mine_connect(m, "localhost", 1135)) {
 		printf("Successfully connected. %s protocol\n", m->ssl ? "SSL" : "Plain");
@@ -14,10 +14,11 @@ int main() {
 				
 				char *event;
 				char data[MINE_CHUNK_SIZE];
-				int64_t rv;
+				int rv;
+				int64_t datalen;
 				while (1) {
-					while ((rv = mine_event_recv(m, &event, data)) >= 0) {
-						printf("%ld, %s, %s\n", rv, event, data);
+					while ((rv = mine_event_recv(m, &event, &datalen, data)) >= 0) {
+						printf("%ld, %d, %s, %s\n", datalen, rv, event, data);
 					}
 					
 					if (rv == -1) {

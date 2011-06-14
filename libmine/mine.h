@@ -30,7 +30,7 @@
 
 char MINE_SSL_LOADED = 0;
 
-typedef struct mine {
+typedef struct {
 	int sock;
 	SSL *ssl;
 	SSL_CTX *ctx;
@@ -38,18 +38,19 @@ typedef struct mine {
 	const char *errstr;
 	char *snd_event;
 	char *rcv_event;
-	uint64_t snd_datalen;
-	uint64_t rcv_datalen;
+	int64_t snd_datalen;
+	int64_t rcv_datalen;
+	int64_t cur_datalen;
 	char readed;
-} mine;
+} MINE;
 
-mine *mine_new();
-void mine_destroy(mine *self);
-char mine_connect(mine *self, char *host, uint16_t port);
-char mine_disconnect(mine *self);
-char mine_login(mine *self, char *login, char *password);
-char mine_event_reg(mine *self, char *event, char *ip);
-char mine_event_send(mine *self, char *event, uint64_t datalen, char *data);
-int64_t mine_event_recv(mine *self, char **event, char *buf);
+MINE *mine_new();
+void mine_destroy(MINE *self);
+char mine_connect(MINE *self, char *host, uint16_t port);
+char mine_disconnect(MINE *self);
+char mine_login(MINE *self, char *login, char *password);
+char mine_event_reg(MINE *self, char *event, char *ip);
+char mine_event_send(MINE *self, char *event, int64_t datalen, int chunklen, char *data);
+int mine_event_recv(MINE *self, char **event, int64_t *datalen, char *buf);
 
 #endif // MINE_H

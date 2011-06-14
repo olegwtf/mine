@@ -5,7 +5,7 @@ cc = gcc
 all: lib test
 
 lib:
-	$(cc) -fPIC -c mine.c
+	$(cc) -fPIC -c mine.c -g
 	$(cc) -shared -o mine.so mine.o
 
 test:
