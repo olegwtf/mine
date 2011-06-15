@@ -65,4 +65,10 @@ elsif (exists $opts{s}) {
 		}
 		close FH;
 	}
+	else {
+		die '-d or -f should be specified';
+	}
+}
+else {
+	die '-r or -s should be specified';
 }
