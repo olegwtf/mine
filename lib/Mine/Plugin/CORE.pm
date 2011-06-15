@@ -97,7 +97,13 @@ sub send : EV_SAFE {
 }
 
 sub log : EV_SAFE {
+	my ($stash, $logpath, $event, $datalen) = @_;
 	
+	unless (exists $stash->{fh}{$logpath}) {
+		open $stash->{fh}{$logpath}, '>>', $logpath;
+	}
+	
+	syswrite($stash->{fh}{$logpath}, "[${\(time)}] $event, $datalen\n");
 }
 
 1;

@@ -8,6 +8,6 @@ use warnings;
 
 my $mine = Mine::Lib->new(autodie => 1);
 $mine->connect('localhost', 1135);
-$mine->login('root', 'toor');
-my $data = 'NEWS';
+$mine->login('root', '123');
+my $data = "NEWS\n";
 $mine->event_send("EV_INFO_IN", length($data), $data);
